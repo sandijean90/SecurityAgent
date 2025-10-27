@@ -1,9 +1,15 @@
 [project]
-name = "securityagent"
+name = "VulnerabiltyAgent"
 version = "0.1.0"
 description = "Add your description here"
 readme = "README.md"
+authors = [
+    {name = "Sandi Besen", email = "sandi.besen@ibm.com"},
+    {name = "Kenneth Ocheltree", email = "kochel@us.ibm.com"}
+]
 requires-python = ">=3.13"
 dependencies = [
+    "beeai-framework>=0.1.59",
     "beeai-sdk>=0.3.7",
+    "openinference-instrumentation-beeai>=0.1.13",
 ]
