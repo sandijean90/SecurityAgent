@@ -11,7 +11,10 @@ from beeai_sdk.a2a.extensions.ui.form import (
     FormExtensionServer,
     FormExtensionSpec,
     FormRender,
-    TextField
+    TextField,
+    CheckboxField,
+    MultiSelectField,
+    OptionItem
 )
 from a2a.types import AgentSkill, Message, Role
 from textwrap import dedent
@@ -67,18 +70,30 @@ async def OperatorAgent(
         FormExtensionSpec(
             params=FormRender(
                 id="user_info_form",
-                title="Welcome! Please tell us about yourself",
+                title="Does your Repo have Vulnerable Dependencies? Let's fix that. ",
                 columns=2,
                 fields=[
-                    TextField(id="first_name", label="First Name", col_span=1),
-                    TextField(id="last_name", label="Last Name", col_span=1),
+                    TextField(id="Repo", label="Repo URL", col_span=1),
+                    TextField(id="Task", label="Additional Context?", col_span=1),
+                    MultiSelectField(
+                        id="multiselect_field",
+                        label="Github Issue Style",
+                        options=[
+                            OptionItem(id="concise", label="concise"),
+                            OptionItem(id="detailed", label="detailed"),
+                        ],
+                        col_span=2,
+                    ),
+                    CheckboxField(
+                        id="checkbox_field",
+                        label="Terms",
+                        content="I agree to the terms and conditions.",
+                        col_span=1,
+                    ),
                 ],
-            )
+            ),
+            
         ),
-    ],
-    llm: Annotated[
-        LLMServiceExtensionServer,
-        LLMServiceExtensionSpec.single_demand(suggested=("openai/gpt-5-mini",))
     ],
 ):
     """Agent that uses LLM inference to respond to user input"""
