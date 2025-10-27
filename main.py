@@ -13,6 +13,9 @@ from beeai_sdk.a2a.extensions.ui.form import (
     FormRender,
     TextField
 )
+from a2a.types import AgentSkill, Message, Role
+from textwrap import dedent
+
 
 
 server = Server()
@@ -32,13 +35,30 @@ server = Server()
                 name="Tavily",
                 description="internet search",
             ),
+            AgentDetailTool(
+                name="Think", 
+                description="Advanced reasoning and analysis to provide thoughtful, well-structured responses to complex questions and topics."
+            )
         ],
-        homepage_url="https://github.com/sandijean90/VulnerabilityAgent",        container_image_url="ghcr.io/beeai-dev/beeai-agents:v0.0.1",
-        author=AgentDetailContributor(
-            name="Sandi Besen",
-            email="sandi.besen@ibm.com",
-        ),
-    )
+        author={
+            "name": "Sandi Besen",
+            "name": "Kenneth Olcheltree"
+        },
+        source_code_url="https://github.com/sandijean90/VulnerabilityAgent"
+    ),
+    skills=[
+        AgentSkill(
+            id="Dependency_Vulnerability_Agent",
+            name="Dependency_Vulnerability_Agent",
+            description=dedent(
+                """\
+                The agent analyzes dependencies from a given repo, determines if there are existing vulnerabilities, and writes github issues to remediate them.
+                """
+            ),
+            tags=["Form","Github","MCP","Code Vulnerability Analysis"],
+            examples=[]
+        )
+    ],
 )
 async def OperatorAgent(
     input: Message,
