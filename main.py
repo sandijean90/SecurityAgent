@@ -18,11 +18,13 @@ from beeai_sdk.a2a.extensions.ui.form import (
 server = Server()
 
 @server.agent(
+    name="Vulnerability Detection Agent",
+    default_input_modes=["text", "text/plain", "application/pdf", "text/csv", "application/json"],
+    default_output_modes=["text", "text/plain"],
     detail=AgentDetail(
-        ui_type="chat",
+        interaction_mode="multi-turn",
         user_greeting="Let's check for known vulnerabilities in your repo's dependencies and write Github Issues to fix them!",
         input_placeholder="Ask anything...",
-        license="Apache 2.0",
         programming_language="Python",
         framework="BeeAI",
         tools=[
@@ -31,16 +33,14 @@ server = Server()
                 description="internet search",
             ),
         ],
-        homepage_url="https://github.com/sandijean90/SecurityAgent",
-        source_code_url="https://github.com/sandijean90/SecurityAgent",
-        container_image_url="ghcr.io/beeai-dev/beeai-agents:v0.0.1",
+        homepage_url="https://github.com/sandijean90/VulnerabilityAgent",        container_image_url="ghcr.io/beeai-dev/beeai-agents:v0.0.1",
         author=AgentDetailContributor(
             name="Sandi Besen",
             email="sandi.besen@ibm.com",
         ),
     )
 )
-async def SecurityAgent(
+async def OperatorAgent(
     input: Message,
     form: Annotated[
         FormExtensionServer,
