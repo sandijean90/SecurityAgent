@@ -3,6 +3,10 @@ from typing import Annotated
 
 from a2a.types import Message
 from a2a.utils.message import get_message_text
+from beeai_framework.backend import ChatModel, ChatModelParameters
+from beeai_framework.agents.requirement import RequirementAgent
+from beeai_framework.middleware.trajectory import GlobalTrajectoryMiddleware
+from beeai_framework.tools.think import ThinkTool
 from beeai_sdk.server import Server
 from beeai_sdk.a2a.types import AgentMessage
 from beeai_sdk.a2a.extensions import LLMServiceExtensionServer, LLMServiceExtensionSpec
@@ -14,7 +18,7 @@ from beeai_sdk.a2a.extensions.ui.form import (
     TextField,
     CheckboxField,
     MultiSelectField,
-    OptionItem
+    OptionItem,
 )
 from a2a.types import AgentSkill, Message, Role
 from textwrap import dedent
@@ -63,8 +67,8 @@ server = Server()
         )
     ],
 )
-async def OperatorAgent(
-    input: Message,
+async def Dependency_Vulnerability_Agent(
+    message: Message,
     form: Annotated[
         FormExtensionServer,
         FormExtensionSpec(
@@ -76,7 +80,7 @@ async def OperatorAgent(
                     TextField(id="Repo", label="Repo URL", col_span=1),
                     TextField(id="Task", label="Additional Context?", col_span=1),
                     MultiSelectField(
-                        id="multiselect_field",
+                        id="Issue_Style",
                         label="Github Issue Style",
                         options=[
                             OptionItem(id="concise", label="concise"),
@@ -85,34 +89,96 @@ async def OperatorAgent(
                         col_span=2,
                     ),
                     CheckboxField(
-                        id="checkbox_field",
+                        id="Terms",
                         label="Terms",
                         content="I agree to the terms and conditions.",
                         col_span=1,
                     ),
+                    MultiSelectField(
+                        id="LLM_Source",
+                        label="LLM Source",
+                        options=[
+                            OptionItem(id="openai", label="OpenAI"),
+                            OptionItem(id="watsonx", label="WatsonX"),
+                            OptionItem(id="ollama", label="Ollama"),
+                        ],
+                        col_span=2,
+                    ),
+                    CheckboxField(
+                        id="llm_key_from_env",
+                        label="LLM Key Source",
+                        content="Use ENV Vars to Set Key",
+                        col_span=1,
+                    ),
+                    TextField(id="LLM_Source_Key", label="LLM Provider Key", col_span=1),
                 ],
             ),
             
         ),
     ],
 ):
-    """Agent that uses LLM inference to respond to user input"""
+    print("Parsing Values")
+    # Parse the form data from the initial message
+    form_data = form.parse_form_response(message=message)
 
-    if llm:
-        # Extract the user's message
-        user_message = get_message_text(input)
-        
-        # Get LLM configuration
-        # Single demand is resolved to default (unless specified otherwise)
-        llm_config = llm.data.llm_fulfillments.get("default")
-        
-        # Use the LLM configuration with your preferred client
-        # The platform provides OpenAI-compatible endpoints
-        api_model = llm_config.api_model
-        api_key = llm_config.api_key
-        api_base = llm_config.api_base
+    # Access the form values
+    repo = form_data.values['Repo'].value
+    task = form_data.values['Task'].value
+    issue_style = form_data.values['Issue_Style'].value
+    terms = form_data.values['Terms'].value
 
-        yield AgentMessage(text=f"LLM access configured for model: {api_model}")
+    llm_provider= form_data.values['LLM_Source'].value[0]
+    llm_key_from_env = form_data.values['llm_key_from_env'].value
+    llm_key_read = form_data.values['LLM_Source_Key'].value
+
+    print("Repo: ", repo, " Task: ", task, " Issue Style: ", issue_style)
+    print("LLM Provider: ", llm_provider)
+
+    # Ollama - No parameters required
+    if llm_provider=="ollama":
+        model="granite4:tiny-h"
+        #model="granite3.3"
+        provider_model=llm_provider+":"+model
+        #!ollama pull $model
+        llm=ChatModel.from_name(provider_model, ChatModelParameters(temperature=0))
+    # OpenAI - Place OpenAI API Key in Colab Secrets (key icon) as OPENAI_KEY
+    elif llm_provider=="openai":
+        model="gpt-5-mini"
+        provider_model=llm_provider+":"+model
+        if llm_key_from_env:
+            api_key=llm_key_read
+        else:
+            api_key=os.getenv("OPENAI_API_KEY","None") #Set secret value using key in left menu
+
+        llm=ChatModel.from_name(provider_model, ChatModelParameters(temperature=1), api_key=api_key)
+    # WatsonX - Place Project ID, API Key and WatsonX URL in Colab Secrets (key icon)
+    elif llm_provider=="watsonx":
+        model="ibm/granite-3-8b-instruct"
+        provider_model=llm_provider+":"+model
+        project_id = os.getenv('WATSONX_PROJECT_ID')  #Set secret value using key in left menu
+        api_key = os.getenv('WATSONX_APIKEY')         #Set secret value using key in left menu
+        base_url = os.getenv('WATSONX_URL')           #Set secret value using key in left menu
+        llm=ChatModel.from_name(provider_model, ChatModelParameters(temperature=0), project_id=project_id, api_key=api_key, base_url=base_url)
+    else:
+        print("Provider " + llm_provider + " undefined")
+
+    """Manager agent that hands off to specialty agents to complete the task"""
+    instructions = "Say hi so I know you're working"
+    user_message="Hi"
+    agent = RequirementAgent(
+        llm=llm,
+        tools=[ThinkTool()],
+        instructions=instructions,
+        requirements=[],
+    )
+    response = await agent.run(user_message).middleware(GlobalTrajectoryMiddleware())
+    response_text = response.output_structured.response
+    
+    yield Message(
+        role="agent", 
+        message_id=str(uuid.uuid4()), 
+        parts=[TextPart(text=response_text)]
+    )
 
 
 
