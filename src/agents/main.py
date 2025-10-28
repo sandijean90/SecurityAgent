@@ -1,10 +1,12 @@
+import json
 import os
 from typing import Annotated
-
+import uuid
 from a2a.types import Message
 from a2a.utils.message import get_message_text
 from beeai_framework.backend import ChatModel, ChatModelParameters
 from beeai_framework.agents.requirement import RequirementAgent
+from beeai_framework.agents.requirement.requirements.conditional import ConditionalRequirement
 from beeai_framework.middleware.trajectory import GlobalTrajectoryMiddleware
 from beeai_framework.tools.think import ThinkTool
 from beeai_sdk.server import Server
@@ -20,8 +22,10 @@ from beeai_sdk.a2a.extensions.ui.form import (
     MultiSelectField,
     OptionItem,
 )
-from a2a.types import AgentSkill, Message, Role
+from a2a.types import AgentSkill, Message, Role , TextPart
 from textwrap import dedent
+from fetch_dependencies_tool import GitHubUvLockReaderURLMinimal, UvLockReaderInput
+from beeai_framework.tools import Tool
 
 
 
@@ -134,6 +138,8 @@ async def Dependency_Vulnerability_Agent(
     print("Repo: ", repo, " Task: ", task, " Issue Style: ", issue_style)
     print("LLM Provider: ", llm_provider)
 
+    dependency_tool = GitHubUvLockReaderURLMinimal()
+
     # Ollama - No parameters required
     if llm_provider=="ollama":
         model="granite4:tiny-h"
@@ -150,7 +156,7 @@ async def Dependency_Vulnerability_Agent(
         else:
             api_key=os.getenv("OPENAI_API_KEY","None") #Set secret value using key in left menu
 
-        llm=ChatModel.from_name(provider_model, ChatModelParameters(temperature=1), api_key=api_key)
+        llm=ChatModel.from_name(provider_model, ChatModelParameters(temperature=1), api_key=api_key, stream=True)
     # WatsonX - Place Project ID, API Key and WatsonX URL in Colab Secrets (key icon)
     elif llm_provider=="watsonx":
         model="ibm/granite-3-8b-instruct"
@@ -163,15 +169,24 @@ async def Dependency_Vulnerability_Agent(
         print("Provider " + llm_provider + " undefined")
 
     """Manager agent that hands off to specialty agents to complete the task"""
-    instructions = "Say hi so I know you're working"
-    user_message="Hi"
+    instructions = "You are an AI agent responsible for finding dependencies that have vulnerabilitites and writing github issues to remediate them."
+    user_message = json.dumps(
+        {
+            "repo_url": repo,
+            "task_context": task,
+            "issue_style": issue_style,
+        }
+    )
     agent = RequirementAgent(
         llm=llm,
-        tools=[ThinkTool()],
+        tools=[ThinkTool(), dependency_tool],
         instructions=instructions,
-        requirements=[],
+        requirements=[ 
+            ConditionalRequirement(ThinkTool, force_at_step=1),
+            ConditionalRequirement(GitHubUvLockReaderURLMinimal, force_at_step=2)
+        ],
     )
-    response = await agent.run(user_message).middleware(GlobalTrajectoryMiddleware())
+    response = await agent.run(user_message).middleware(GlobalTrajectoryMiddleware(included=[Tool]))
     response_text = response.output_structured.response
     
     yield Message(
