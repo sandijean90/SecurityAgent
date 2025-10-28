@@ -63,7 +63,8 @@ server = Server()
         )
     ],
 )
-async def OperatorAgent(
+
+async def Manager(
     input: Message,
     form: Annotated[
         FormExtensionServer,
@@ -96,23 +97,7 @@ async def OperatorAgent(
         ),
     ],
 ):
-    """Agent that uses LLM inference to respond to user input"""
-
-    if llm:
-        # Extract the user's message
-        user_message = get_message_text(input)
-        
-        # Get LLM configuration
-        # Single demand is resolved to default (unless specified otherwise)
-        llm_config = llm.data.llm_fulfillments.get("default")
-        
-        # Use the LLM configuration with your preferred client
-        # The platform provides OpenAI-compatible endpoints
-        api_model = llm_config.api_model
-        api_key = llm_config.api_key
-        api_base = llm_config.api_base
-
-        yield AgentMessage(text=f"LLM access configured for model: {api_model}")
+    yield "HI"
 
 
 
