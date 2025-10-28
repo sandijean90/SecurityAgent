@@ -1,6 +1,7 @@
 import os
 from typing import Annotated
-
+import uuid
+from a2a.types import Message, TextPart
 from a2a.types import Message
 from a2a.utils.message import get_message_text
 from beeai_sdk.server import Server
@@ -18,7 +19,11 @@ from beeai_sdk.a2a.extensions.ui.form import (
 )
 from a2a.types import AgentSkill, Message, Role
 from textwrap import dedent
-
+from beeai_framework.backend import ChatModel
+from beeai_framework.agents.requirement import RequirementAgent
+from beeai_framework.middleware.trajectory import GlobalTrajectoryMiddleware
+from beeai_framework.memory import UnconstrainedMemory
+from beeai_framework.tools.think import ThinkTool
 
 
 server = Server()
@@ -63,8 +68,7 @@ server = Server()
         )
     ],
 )
-
-async def Manager(
+async def Dependency_Vulnerability_Agent(
     input: Message,
     form: Annotated[
         FormExtensionServer,
@@ -97,8 +101,24 @@ async def Manager(
         ),
     ],
 ):
-    yield "HI"
-
+    """Manager agent that hands off to specialty agents to complete the task"""
+    llm = os.getenv("LLM", "openai:gpt-5-mini")
+    instructions = "Say hi so I know you're working"
+    user_message="Hi"
+    agent = RequirementAgent(
+        llm=ChatModel.from_name(llm),
+        tools=[ThinkTool()],
+        instructions=instructions,
+        requirements=[],
+    )
+    response = await agent.run(user_message).middleware(GlobalTrajectoryMiddleware())
+    response_text = response.output_structured.response
+    
+    yield Message(
+        role="agent", 
+        message_id=str(uuid.uuid4()), 
+        parts=[TextPart(text=response_text)]
+    )
 
 
 def main():

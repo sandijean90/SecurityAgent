@@ -63,7 +63,7 @@ server = Server()
         )
     ],
 )
-async def OperatorAgent(
+async def Dependency_Vulnerability_Agent(
     input: Message,
     form: Annotated[
         FormExtensionServer,
