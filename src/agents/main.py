@@ -1,10 +1,11 @@
 import os
 from typing import Annotated
-
+import uuid
 from a2a.types import Message
 from a2a.utils.message import get_message_text
 from beeai_framework.backend import ChatModel, ChatModelParameters
 from beeai_framework.agents.requirement import RequirementAgent
+from beeai_framework.agents.requirement.requirements.conditional import ConditionalRequirement
 from beeai_framework.middleware.trajectory import GlobalTrajectoryMiddleware
 from beeai_framework.tools.think import ThinkTool
 from beeai_sdk.server import Server
@@ -20,8 +21,9 @@ from beeai_sdk.a2a.extensions.ui.form import (
     MultiSelectField,
     OptionItem,
 )
-from a2a.types import AgentSkill, Message, Role
+from a2a.types import AgentSkill, Message, Role , TextPart
 from textwrap import dedent
+from fetch_dependencies_tool import GitHubUvLockReader
 
 
 
@@ -163,13 +165,17 @@ async def Dependency_Vulnerability_Agent(
         print("Provider " + llm_provider + " undefined")
 
     """Manager agent that hands off to specialty agents to complete the task"""
-    instructions = "Say hi so I know you're working"
+    instructions = "You are an AI agent responsible for finding dependencies that have vulnerabilitites and writing github issues to remediate them."
     user_message="Hi"
     agent = RequirementAgent(
         llm=llm,
-        tools=[ThinkTool()],
+        tools=[ThinkTool(),
+               GitHubUvLockReader()],
         instructions=instructions,
-        requirements=[],
+        requirements=[ 
+            ConditionalRequirement(ThinkTool, force_at_step=1),
+            ConditionalRequirement(GitHubUvLockReader, force_at_step=2)
+        ],
     )
     response = await agent.run(user_message).middleware(GlobalTrajectoryMiddleware())
     response_text = response.output_structured.response
