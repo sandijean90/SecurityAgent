@@ -1,6 +1,6 @@
 import json
 import os
-from typing import Annotated, Any, Dict
+from typing import Annotated
 import uuid
 from a2a.types import Message
 from a2a.utils.message import get_message_text
@@ -24,68 +24,13 @@ from beeai_sdk.a2a.extensions.ui.form import (
 )
 from a2a.types import AgentSkill, Message, Role , TextPart
 from textwrap import dedent
-from pydantic import BaseModel
 from fetch_dependencies_tool import GitHubUvLockReaderURLMinimal
-from dependency_search_tool import OSSIndexTool, OSSIndexOutput, input_from_agent_context
-from beeai_framework.tools import Tool, ToolRunOptions
-from beeai_framework.emitter import Emitter
-from beeai_framework.context import RunContext
+from dependency_search_tool import OSSIndexFromContextTool
+from beeai_framework.tools import Tool
 
 
 
 server = Server()
-
-
-class AgentContextPayload(BaseModel):
-    agent_context: Dict[str, Any]
-
-    @classmethod
-    def model_json_schema(cls, *args: Any, **kwargs: Any) -> Dict[str, Any]:
-        # Return a minimal JSON schema acceptable to OpenAI function calling.
-        return {
-            "type": "object",
-            "properties": {
-                "agent_context": {
-                    "type": "object",
-                    "description": "Full agent context dictionary from previous steps.",
-                }
-            },
-            "required": ["agent_context"],
-        }
-
-
-class OSSIndexFromContextTool(Tool[AgentContextPayload, ToolRunOptions, OSSIndexOutput]):
-    """
-    Adapter tool that converts broader agent context into the OSS Index input format
-    before delegating to the underlying OSSIndexTool.
-    """
-
-    name = "ossindex_vuln_scan_from_context"
-    description = (
-        "Run an OSS Index vulnerability scan using the current agent context. "
-        "Pass a JSON object with an 'agent_context' key containing packages."
-    )
-    input_schema = AgentContextPayload
-
-    def __init__(self) -> None:
-        super().__init__()
-        self._oss_tool = OSSIndexTool()
-
-    def _create_emitter(self) -> Emitter:
-        return Emitter.root().child(namespace=["tool", "ossindex_from_context"], creator=self)
-
-    async def _run(
-        self,
-        input: AgentContextPayload,
-        options: ToolRunOptions | None,
-        context: RunContext,
-    ) -> OSSIndexOutput:
-        oss_input = input_from_agent_context(
-            input.agent_context,
-            email=os.getenv("OSS_INDEX_EMAIL"),
-            token=os.getenv("OSS_INDEX_API"),
-        )
-        return await self._oss_tool.run(oss_input)
 
 @server.agent(
     name="Vulnerability Detection Agent",

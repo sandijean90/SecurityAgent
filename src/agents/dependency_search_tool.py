@@ -4,10 +4,10 @@ import asyncio
 import base64
 import dataclasses
 import json
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Mapping, Optional, Tuple
 import httpx
-from pydantic import BaseModel, Field, ValidationError, field_validator
-from beeai_framework.tools import Tool, ToolRunOptions
+from pydantic import BaseModel, Field, ValidationError, field_validator, ConfigDict
+from beeai_framework.tools import JSONToolOutput, Tool, ToolRunOptions
 from beeai_framework.emitter import Emitter
 from beeai_framework.context import RunContext
 
@@ -79,12 +79,35 @@ class PackageReport(BaseModel):
     vulnerabilities: List[Vulnerability] = []
 
 
-class OSSIndexOutput(BaseModel):
+class OSSIndexResult(BaseModel):
     # keyed by input purl
     results: Dict[str, PackageReport]
     # diagnostics
     rate_limited: bool = False
     errors: List[str] = []
+
+
+class AgentContextPackage(BaseModel):
+    name: str
+    version: str
+    ecosystem: str
+
+    model_config = ConfigDict(extra="ignore")
+
+
+class OSSIndexOutput(JSONToolOutput[OSSIndexResult]):
+    pass
+
+
+class AgentContextPayload(BaseModel):
+    repo: Optional[str] = None
+    reg: Optional[str] = None
+    files_scanned: Optional[List[str]] = None
+    files_scanned_total: Optional[int] = None
+    packages: List[AgentContextPackage] = Field(default_factory=list)
+    stats: Optional[Dict[str, Any]] = None
+
+    model_config = ConfigDict(extra="ignore")
 
 
 # -----------------------------
@@ -229,20 +252,68 @@ class OSSIndexTool(Tool[OSSIndexInput, ToolRunOptions, OSSIndexOutput]):
                         vulnerabilities=vulns,
                     )
 
-        return OSSIndexOutput(results=results, rate_limited=rate_limited_seen, errors=all_errors)
+        return OSSIndexOutput(OSSIndexResult(results=results, rate_limited=rate_limited_seen, errors=all_errors))
 
 
 # -----------------------------
 # Helper: adapt your agent context to the tool input
 # -----------------------------
 
-def input_from_agent_context(agent_context: Dict[str, Any], *, email: str | None = None, token: str | None = None) -> OSSIndexInput:
+def input_from_agent_context(
+    agent_context: Mapping[str, Any] | AgentContextPayload,
+    *,
+    email: str | None = None,
+    token: str | None = None,
+) -> OSSIndexInput:
     """
     Convert the example agent context payload to OSSIndexInput.
     Expects agent_context['packages'] with {'name','version','ecosystem'} keys.
     """
     pkgs = []
-    for obj in agent_context.get("packages", []):
+    if isinstance(agent_context, AgentContextPayload):
+        package_iter = agent_context.packages
+    else:
+        package_iter = agent_context.get("packages", [])  # type: ignore[assignment]
+
+    pkgs = []
+    for obj in package_iter:
+        if isinstance(obj, AgentContextPackage):
+            pkgs.append(Package(name=obj.name, version=obj.version, ecosystem=obj.ecosystem))
+            continue
         # Only keep the essential fields
         pkgs.append(Package(name=obj["name"], version=obj["version"], ecosystem=obj["ecosystem"]))
     return OSSIndexInput(packages=pkgs, auth_email=email, auth_token=token)
+
+
+class OSSIndexFromContextTool(Tool[AgentContextPayload, ToolRunOptions, OSSIndexOutput]):
+    """
+    Convenience tool that consumes the GitHubUvLockReaderURLMinimal output
+    and forwards the normalized package list to OSS Index.
+    """
+
+    name = "ossindex_vuln_scan_from_context"
+    description = (
+        "Run an OSS Index vulnerability scan using the lockfile summary returned by "
+        "GitHubUvLockReaderURLMinimal or a similar dependency context payload."
+    )
+    input_schema = AgentContextPayload
+
+    def __init__(self, options: dict[str, Any] | None = None) -> None:
+        super().__init__(options)
+        self._oss_tool = OSSIndexTool(options)
+
+    def _create_emitter(self) -> Emitter:
+        return Emitter.root().child(namespace=["tool", "ossindex", "from_context"], creator=self)
+
+    async def _run(
+        self,
+        input: AgentContextPayload,
+        options: ToolRunOptions | None,
+        context: RunContext,
+    ) -> OSSIndexOutput:
+        oss_input = input_from_agent_context(
+            input,
+            email=os.getenv("OSS_INDEX_EMAIL"),
+            token=os.getenv("OSS_INDEX_API"),
+        )
+        return await self._oss_tool._run(oss_input, options, context)
