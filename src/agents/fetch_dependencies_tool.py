@@ -71,11 +71,18 @@ class MinimalPackage(BaseModel):
     paths: List[str] = Field(default_factory=list)  # lockfile paths referencing this package
 
 
+class PackageSummary(BaseModel):
+    name: Optional[str] = None
+    version: Optional[str] = None
+    ecosystem: Optional[str] = None
+
+
 class MinimalResult(BaseModel):
     repo: str                   # "owner/repo"
-    ref: str                    # "HEAD" or branch/tag/sha
+    reg: str                    # "HEAD" or branch/tag/sha
     files_scanned: List[str]
-    packages: List[MinimalPackage]
+    files_scanned_total: int
+    packages: List[PackageSummary]
     stats: Dict[str, Any]       # {"unique_pkgs": int, "skipped_local": int, "truncated": bool}
 
 
@@ -350,9 +357,10 @@ class GitHubUvLockReaderURLMinimal(Tool[UvLockReaderInput, ToolRunOptions, Minim
 
             result = MinimalResult(
                 repo=f"{owner}/{repo}",
-                ref=ref,
+                reg=ref,
                 files_scanned=files_scanned,
-                packages=deduped,
+                files_scanned_total=len(files_scanned),
+                packages=[PackageSummary(name=p.name, version=p.version, ecosystem=p.ecosystem) for p in deduped],
                 stats={
                     "unique_pkgs": len(deduped),
                     "skipped_local": skipped_local,
