@@ -2,11 +2,11 @@ import json
 import os
 from typing import Annotated
 import uuid
+import re
 from a2a.types import Message
 from a2a.utils.message import get_message_text
 from beeai_framework.backend import ChatModel, ChatModelParameters
 from beeai_framework.backend.message import AssistantMessage, UserMessage
-
 from beeai_framework.memory import UnconstrainedMemory
 from beeai_framework.agents.requirement import RequirementAgent
 from beeai_framework.agents.requirement.requirements.conditional import ConditionalRequirement
@@ -20,6 +20,8 @@ from agentstack_sdk.a2a.extensions import (
     AgentDetail, AgentDetailContributor, AgentDetailTool,
     TrajectoryExtensionServer, TrajectoryExtensionSpec,
     )
+from agentstack_sdk.a2a.extensions import (
+    CitationExtensionServer, CitationExtensionSpec,)
 from agentstack_sdk.a2a.extensions.ui.form import (
     FormExtensionServer,FormExtensionSpec,
     FormRender,TextField,CheckboxField,
@@ -51,6 +53,26 @@ def to_framework_message(message: Message):
         return UserMessage(message_text)
     else:
         raise ValueError(f"Invalid message role: {message.role}")
+    
+def extract_citations(text: str, vulnerability_results=None) -> tuple[list[dict], str]:
+    """Extract citations and clean text - returns citations in the correct format"""
+    citations, offset = [], 0
+    pattern = r"\[([^\]]+)\]\(([^)]+)\)"
+    
+    for match in re.finditer(pattern, text):
+        content, url = match.groups()
+        start = match.start() - offset
+
+        citations.append({
+            "url": url,
+            "title": url.split("/")[-1].replace("-", " ").title() or content[:50],
+            "description": content[:100] + ("..." if len(content) > 100 else ""),
+            "start_index": start, 
+            "end_index": start + len(content)
+        })
+        offset += len(match.group(0)) - len(content)
+
+    return citations, re.sub(pattern, r"\1", text)
 
 
 @server.agent(
@@ -105,6 +127,8 @@ def to_framework_message(message: Message):
 async def Dependency_Vulnerability_Agent(
     message: Message,
     context: RunContext,
+    citation: Annotated[CitationExtensionServer, CitationExtensionSpec()],
+    trajectory: Annotated[TrajectoryExtensionServer, TrajectoryExtensionSpec()],
     form: Annotated[
         FormExtensionServer,
         FormExtensionSpec(
@@ -188,7 +212,21 @@ async def Dependency_Vulnerability_Agent(
         print("Provider " + llm_provider + " undefined")
 
     """Manager agent that hands off to specialty agents to complete the task"""
-    instructions = "You are an AI agent responsible for finding dependencies that have vulnerabilitites and writing github issues to remediate them."
+    instructions = """
+        You are an AI agent responsible for finding dependencies that have vulnerabilitites and writing github issues to remediate them.
+        Summarize the vulnerability scan and GitHub issues created.
+
+        IMPORTANT: Include markdown citations for all sources:
+        - Link to repository analyzed using [Repository](repo-url)
+        - Link to created GitHub issues using [Issue #123: Title](github-issue-url)
+        - Link to OSS Index reports using [package-name vulnerability report](reference-url)
+
+        Example:
+        "Found 1 vulnerabilty in [Repository](https://github.com/user/repo)
+        Created [GitHub Issue #45: Fix numpy vulnerability](https://github.com/user/repo/issues/45)
+        Found vulnerability [CVE-2021-34141 in numpy@1.21.1](https://ossindex.sonatype.org/vulnerability/CVE-2021-34141)"
+        """
+    
     memory = get_memory(context)
 
     # Load conversation history into memory
@@ -216,6 +254,16 @@ async def Dependency_Vulnerability_Agent(
     )
     response = await agent.run(user_message).middleware(GlobalTrajectoryMiddleware(included=[Tool]))
     response_text = response.output_structured.response
+
+    citations, clean_text = extract_citations(response_text)
+
+    if citations:
+        yield trajectory.trajectory_metadata(
+            title="Citations Processed",
+            content=f"Extracted {len(citations)} citation(s) from response"
+        )
+        yield citation.citation_metadata(citations=citations)
+    
     
     yield Message(
         role="agent", 
