@@ -4,7 +4,7 @@ import pydantic
 from mcp import ClientSession
 from mcp.client.streamable_http import streamablehttp_client
 from beeai_framework.tools.mcp import MCPTool
-from beeai_sdk.a2a.extensions.auth.oauth import OAuthExtensionServer, OAuthExtensionSpec
+from agentstack_sdk.a2a.extensions.auth.oauth import OAuthExtensionServer, OAuthExtensionSpec
 
 class MCPSessionManager:
     def __init__(self, oauth: Optional[OAuthExtensionServer] = None):

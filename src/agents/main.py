@@ -9,11 +9,11 @@ from beeai_framework.agents.requirement import RequirementAgent
 from beeai_framework.agents.requirement.requirements.conditional import ConditionalRequirement
 from beeai_framework.middleware.trajectory import GlobalTrajectoryMiddleware
 from beeai_framework.tools.think import ThinkTool
-from beeai_sdk.server import Server
-from beeai_sdk.a2a.types import AgentMessage
-from beeai_sdk.a2a.extensions import LLMServiceExtensionServer, LLMServiceExtensionSpec
-from beeai_sdk.a2a.extensions import AgentDetail, AgentDetailContributor, AgentDetailTool
-from beeai_sdk.a2a.extensions.ui.form import (
+from agentstack_sdk.server import Server
+from agentstack_sdk.a2a.types import AgentMessage
+from agentstack_sdk.a2a.extensions import LLMServiceExtensionServer, LLMServiceExtensionSpec
+from agentstack_sdk.a2a.extensions import AgentDetail, AgentDetailContributor, AgentDetailTool
+from agentstack_sdk.a2a.extensions.ui.form import (
     FormExtensionServer,
     FormExtensionSpec,
     FormRender,
