@@ -1,19 +1,19 @@
 import os
 from typing import Optional, Any, Annotated
-from beeai_sdk.server import Server
-from beeai_sdk.server.context import RunContext
-from beeai_sdk.a2a.types import AgentMessage
+from agentstack_sdk.server import Server
+from agentstack_sdk.server.context import RunContext
+from agentstack_sdk.a2a.types import AgentMessage
 from a2a.types import Message
-from beeai_sdk.a2a.extensions.auth.oauth import OAuthExtensionServer, OAuthExtensionSpec
+from agentstack_sdk.a2a.extensions.auth.oauth import OAuthExtensionServer, OAuthExtensionSpec
 from session_manager import MCPSessionManager
-from beeai_sdk.a2a.extensions import AgentDetail, AgentDetailContributor, AgentDetailTool
-from beeai_sdk.a2a.extensions.ui.form import (
+from agentstack_sdk.a2a.extensions import AgentDetail, AgentDetailContributor, AgentDetailTool
+from agentstack_sdk.a2a.extensions.ui.form import (
     FormExtensionServer,
     FormExtensionSpec,
     FormRender,
     TextField
 )
-from beeai_sdk.a2a.extensions import LLMServiceExtensionServer, LLMServiceExtensionSpec
+from agentstack_sdk.a2a.extensions import LLMServiceExtensionServer, LLMServiceExtensionSpec
 from a2a.utils.message import get_message_text
 
 

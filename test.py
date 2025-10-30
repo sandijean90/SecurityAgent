@@ -3,9 +3,9 @@ import os
 from a2a.types import (
     Message,
 )
-from beeai_sdk.server import Server
-from beeai_sdk.server.context import RunContext
-from beeai_sdk.a2a.extensions import AgentDetail, AgentDetailContributor, AgentDetailTool
+from agentstack_sdk.server import Server
+from agentstack_sdk.server.context import RunContext
+from agentstack_sdk.a2a.extensions import AgentDetail, AgentDetailContributor, AgentDetailTool
 
 server = Server()
 

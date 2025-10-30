@@ -3,11 +3,11 @@ from textwrap import dedent
 
 from a2a.types import AgentSkill
 from beeai_framework.adapters.beeai_platform.serve.server import BeeAIPlatformServer
-from beeai_sdk.a2a.extensions.ui.agent_detail import AgentDetail
+from agentstack_sdk.a2a.extensions.ui.agent_detail import AgentDetail
 from dotenv import load_dotenv
 from openinference.instrumentation.beeai import BeeAIInstrumentor
-from beeai_sdk.a2a.types import AgentMessage
-from beeai_sdk.a2a.extensions import AgentDetail, AgentDetailContributor, AgentDetailTool
+from agentstack_sdk.a2a.types import AgentMessage
+from agentstack_sdk.a2a.extensions import AgentDetail, AgentDetailContributor, AgentDetailTool
 from agents.agent_manager import get_agent_manager
 from a2a.types import AgentSkill, Message, Role
 

@@ -3,11 +3,11 @@ from typing import Annotated
 
 from a2a.types import Message
 from a2a.utils.message import get_message_text
-from beeai_sdk.server import Server
-from beeai_sdk.a2a.types import AgentMessage
-from beeai_sdk.a2a.extensions import LLMServiceExtensionServer, LLMServiceExtensionSpec
-from beeai_sdk.a2a.extensions import AgentDetail, AgentDetailContributor, AgentDetailTool
-from beeai_sdk.a2a.extensions.ui.form import (
+from agentstack_sdk.server import Server
+from agentstack_sdk.a2a.types import AgentMessage
+from agentstack_sdk.a2a.extensions import LLMServiceExtensionServer, LLMServiceExtensionSpec
+from agentstack_sdk.a2a.extensions import AgentDetail, AgentDetailContributor, AgentDetailTool
+from agentstack_sdk.a2a.extensions.ui.form import (
     FormExtensionServer,
     FormExtensionSpec,
     FormRender,
