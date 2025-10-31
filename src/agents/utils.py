@@ -79,11 +79,9 @@ async def create_repo_scoped_tool(original_tool: Tool, repository) -> Tool:
 
     if not repository:
         raise RuntimeError("GITHUB_REPOSITORY environment variable is required")
-    print("1: ", repository)
+    
     repository = repository.replace("https://","")
-    print("2: ", repository)
     repository = repository.replace("github.com/","")
-    print("3: ", repository)
 
     owner, repo = repository.split("/")
 
