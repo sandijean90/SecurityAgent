@@ -7,12 +7,12 @@ from beeai_framework.tools import Tool, tool
 from dotenv import load_dotenv
 from pydantic import BaseModel
 
+#from main import get_secret
+
 from session_manager import SessionManager
 
 load_dotenv()
 
-#model = os.getenv("MODEL", "openai:gpt-5-mini")
-#llm = ChatModel.from_name(model, {"api_key": os.getenv("API_KEY")})
 
 # Shared singleton instance
 session_manager = SessionManager()
@@ -68,7 +68,7 @@ async def fetch_content(url: str) -> str:
         return ""
 
 
-async def create_repo_scoped_tool(original_tool: Tool) -> Tool:
+async def create_repo_scoped_tool(original_tool: Tool, repository) -> Tool:
     """Create a wrapper tool that hardcodes owner and repo from GITHUB_REPOSITORY env var.
 
     This function dynamically creates a new tool that:
@@ -76,9 +76,14 @@ async def create_repo_scoped_tool(original_tool: Tool) -> Tool:
     2. Hardcodes owner and repo from GITHUB_REPOSITORY environment variable
     3. Creates a wrapper function that calls the original tool with the hardcoded values
     """
-    repository = os.getenv("GITHUB_REPOSITORY")
+
     if not repository:
         raise RuntimeError("GITHUB_REPOSITORY environment variable is required")
+    print("1: ", repository)
+    repository = repository.replace("https://","")
+    print("2: ", repository)
+    repository = repository.replace("github.com/","")
+    print("3: ", repository)
 
     owner, repo = repository.split("/")
 

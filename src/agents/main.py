@@ -46,6 +46,7 @@ server = Server()
 memories = {}
 
 
+
 def get_memory(context: RunContext) -> UnconstrainedMemory:
     """Get or create session memory"""
     context_id = getattr(context, "context_id", getattr(context, "session_id", "default"))
@@ -138,41 +139,41 @@ async def Dependency_Vulnerability_Agent(
     citation: Annotated[CitationExtensionServer, CitationExtensionSpec()],
     trajectory: Annotated[TrajectoryExtensionServer, TrajectoryExtensionSpec()],
     secrets: Annotated[
-    SecretsExtensionServer,
-    SecretsExtensionSpec(
-        params=SecretsServiceExtensionParams(
-            secret_demands={
-                # LLM Keys
-                "OPENAI_API_KEY": SecretDemand(
-                    name="OpenAI API Key",
-                    description="API key for OpenAI services"
-                ),
-                "WATSONX_PROJECT_ID": SecretDemand(
-                    name="WatsonX Project ID",
-                    description="Project ID for WatsonX"
-                ),
-                "WATSONX_APIKEY": SecretDemand(
-                    name="WatsonX API Key",
-                    description="API key for WatsonX"
-                ),
-                "WATSONX_URL": SecretDemand(
-                    name="WatsonX URL",
-                    description="Base URL for WatsonX instance"
-                ),
-                # GitHub Keys
-                "GITHUB_PAT": SecretDemand(
-                    name="GitHub Personal Access Token",
-                    description="Personal access token for GitHub API"
-                ),
-                # OSS Index Keys
-                "OSS_INDEX_API": SecretDemand(
-                    name="OSS Index API Key",
-                    description="API key for Sonatype OSS Index"
-                ),
-                "OSS_INDEX_EMAIL": SecretDemand(
-                    name="OSS Index Email",
-                    description="Email used for OSS Index account"
-                ),
+        SecretsExtensionServer,
+        SecretsExtensionSpec(
+            params=SecretsServiceExtensionParams(
+                secret_demands={
+                    # LLM Keys
+                    "OPENAI_API_KEY": SecretDemand(
+                        name="OpenAI API Key",
+                        description="API key for OpenAI services"
+                    ),
+                    "WATSONX_PROJECT_ID": SecretDemand(
+                        name="WatsonX Project ID",
+                        description="Project ID for WatsonX"
+                    ),
+                    "WATSONX_APIKEY": SecretDemand(
+                        name="WatsonX API Key",
+                        description="API key for WatsonX"
+                    ),
+                    "WATSONX_URL": SecretDemand(
+                        name="WatsonX URL",
+                        description="Base URL for WatsonX instance"
+                    ),
+                    # GitHub Keys
+                    "GITHUB_PAT": SecretDemand(
+                        name="GitHub Personal Access Token",
+                        description="Personal access token for GitHub API"
+                    ),
+                    # OSS Index Keys
+                    "OSS_INDEX_API": SecretDemand(
+                        name="OSS Index API Key",
+                        description="API key for Sonatype OSS Index"
+                    ),
+                    "OSS_INDEX_EMAIL": SecretDemand(
+                        name="OSS Index Email",
+                        description="Email used for OSS Index account"
+                    ),
                 }
             )
         ),
@@ -323,7 +324,7 @@ async def Dependency_Vulnerability_Agent(
         return
     
     """Create and configure the issue workflow management agent."""
-    tools = await session_manager.get_tools()
+    tools = await session_manager.get_tools(github_pat_key)
     try:
         tools = await get_tools_by_names(tools, ["issue_write", "list_issue_types", "list_label"])
         
@@ -333,11 +334,11 @@ async def Dependency_Vulnerability_Agent(
 
         for tool in tools:
             if tool.name == "issue_write":
-                issue_write = await create_repo_scoped_tool(tool)
+                issue_write = await create_repo_scoped_tool(tool, repo)
             elif tool.name == "list_issue_types":
-                list_issue_types = await create_repo_scoped_tool(tool)
+                list_issue_types = await create_repo_scoped_tool(tool, repo)
             elif tool.name == "list_label":
-                list_label = await create_repo_scoped_tool(tool)
+                list_label = await create_repo_scoped_tool(tool, repo)
 
     except ToolNotFoundError as e:
         raise RuntimeError(f"Failed to configure the agent: {e}") from e

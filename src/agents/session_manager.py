@@ -14,32 +14,28 @@ class SessionManager:
         self._streams: Optional[Any] = None
         self._tools: Optional[list[MCPTool]] = None
 
-    async def get_session(self) -> ClientSession:
+    async def get_session(self, github_pat) -> ClientSession:
         if self._session is None:
-            await self.connect()
+            await self.connect(github_pat)
         return self._session
 
-    async def get_tools(self) -> list[MCPTool]:
+    async def get_tools(self, github_pat) -> list[MCPTool]:
         if self._tools is None:
-            session = await self.get_session()
+            session = await self.get_session(github_pat)
             self._tools = await MCPTool.from_client(session)
-            print("After await MCPTool.from_client")
         return self._tools
 
-    async def connect(self):
-        print("In connect")
+    async def connect(self,github_pat):
         headers = {
-            "Authorization": f"Bearer {os.getenv('GITHUB_PAT')}",
+            "Authorization": f"Bearer {github_pat}",
             "Accept": "application/json",
             "X-MCP-Toolsets": "issues,labels",
         }
-        print("GITHUB_PAT: ",os.getenv('GITHUB_PAT'))
         self._streams = streamablehttp_client("https://api.githubcopilot.com/mcp", headers=headers)
         streams = await self._streams.__aenter__()
         self._session = ClientSession(streams[0], streams[1])
         await self._session.__aenter__()
         await self._session.initialize()
-        print("After self._session.initialize")
 
     async def close(self):
         if self._session:
