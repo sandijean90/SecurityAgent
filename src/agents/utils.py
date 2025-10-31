@@ -7,16 +7,15 @@ from beeai_framework.tools import Tool, tool
 from dotenv import load_dotenv
 from pydantic import BaseModel
 
-from agents.session_manager import SessionManager
+from session_manager import SessionManager
 
 load_dotenv()
 
-model = os.getenv("MODEL", "openai:gpt-5-mini")
-llm = ChatModel.from_name(model, {"api_key": os.getenv("API_KEY")})
+#model = os.getenv("MODEL", "openai:gpt-5-mini")
+#llm = ChatModel.from_name(model, {"api_key": os.getenv("API_KEY")})
 
 # Shared singleton instance
 session_manager = SessionManager()
-
 
 class ToolNotFoundError(Exception):
     """Raised when required tools are not available."""

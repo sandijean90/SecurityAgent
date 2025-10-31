@@ -10,6 +10,7 @@ from beeai_framework.backend.message import AssistantMessage, UserMessage
 from beeai_framework.memory import UnconstrainedMemory
 from beeai_framework.agents.requirement import RequirementAgent
 from beeai_framework.agents.requirement.requirements.conditional import ConditionalRequirement
+from beeai_framework.agents.requirement.requirements.ask_permission import AskPermissionRequirement
 from beeai_framework.middleware.trajectory import GlobalTrajectoryMiddleware
 from beeai_framework.tools.think import ThinkTool
 from agentstack_sdk.server import Server
@@ -38,11 +39,12 @@ from textwrap import dedent
 from fetch_dependencies_tool import GitHubUvLockReaderURLMinimal
 from dependency_search_tool import OSSIndexFromContextTool
 from beeai_framework.tools import Tool
-
+from utils import ToolNotFoundError, create_repo_scoped_tool, get_tools_by_names, session_manager
 
 
 server = Server()
 memories = {}
+
 
 def get_memory(context: RunContext) -> UnconstrainedMemory:
     """Get or create session memory"""
@@ -278,6 +280,7 @@ async def Dependency_Vulnerability_Agent(
             stream=True
         )
 
+
     # WatsonX - Place Project ID, API Key and WatsonX URL in Colab Secrets (key icon)
     elif llm_provider == "watsonx":
         model = "ibm/granite-3-8b-instruct"
@@ -319,6 +322,27 @@ async def Dependency_Vulnerability_Agent(
         yield "OSS Index API key and email are required"
         return
     
+    """Create and configure the issue workflow management agent."""
+    tools = await session_manager.get_tools()
+    try:
+        tools = await get_tools_by_names(tools, ["issue_write", "list_issue_types", "list_label"])
+        
+        issue_write = None
+        list_issue_types = None
+        list_label = None
+
+        for tool in tools:
+            if tool.name == "issue_write":
+                issue_write = await create_repo_scoped_tool(tool)
+            elif tool.name == "list_issue_types":
+                list_issue_types = await create_repo_scoped_tool(tool)
+            elif tool.name == "list_label":
+                list_label = await create_repo_scoped_tool(tool)
+
+    except ToolNotFoundError as e:
+        raise RuntimeError(f"Failed to configure the agent: {e}") from e
+
+
     dependency_tool = GitHubUvLockReaderURLMinimal()
     oss_index_tool = OSSIndexFromContextTool(api_key=oss_api_key, email=oss_email_key)
 
@@ -351,12 +375,12 @@ async def Dependency_Vulnerability_Agent(
     agent = RequirementAgent(
         llm=llm,
         memory=memory,
-        tools=[ThinkTool(), dependency_tool, oss_index_tool],
+        tools=[ThinkTool(), dependency_tool, oss_index_tool, issue_write],
         instructions=instructions,
         requirements=[ 
             ConditionalRequirement(ThinkTool, force_at_step=1),
             ConditionalRequirement(GitHubUvLockReaderURLMinimal, force_at_step=2),
-            ConditionalRequirement(OSSIndexFromContextTool, force_at_step=3),
+            ConditionalRequirement(issue_write, only_after=[GitHubUvLockReaderURLMinimal,oss_index_tool]),
         ],
     )
     response = await agent.run(user_message).middleware(GlobalTrajectoryMiddleware(included=[Tool]))
