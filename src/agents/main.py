@@ -20,6 +20,12 @@ from agentstack_sdk.a2a.extensions import (
     AgentDetail, AgentDetailContributor, AgentDetailTool,
     TrajectoryExtensionServer, TrajectoryExtensionSpec,
     )
+from agentstack_sdk.a2a.extensions.auth.secrets import (
+    SecretDemand,
+    SecretsExtensionServer,
+    SecretsExtensionSpec,
+    SecretsServiceExtensionParams,
+)
 from agentstack_sdk.a2a.extensions import (
     CitationExtensionServer, CitationExtensionSpec,)
 from agentstack_sdk.a2a.extensions.ui.form import (
@@ -129,6 +135,46 @@ async def Dependency_Vulnerability_Agent(
     context: RunContext,
     citation: Annotated[CitationExtensionServer, CitationExtensionSpec()],
     trajectory: Annotated[TrajectoryExtensionServer, TrajectoryExtensionSpec()],
+    secrets: Annotated[
+    SecretsExtensionServer,
+    SecretsExtensionSpec(
+        params=SecretsServiceExtensionParams(
+            secret_demands={
+                # LLM Keys
+                "OPENAI_API_KEY": SecretDemand(
+                    name="OpenAI API Key",
+                    description="API key for OpenAI services"
+                ),
+                "WATSONX_PROJECT_ID": SecretDemand(
+                    name="WatsonX Project ID",
+                    description="Project ID for WatsonX"
+                ),
+                "WATSONX_APIKEY": SecretDemand(
+                    name="WatsonX API Key",
+                    description="API key for WatsonX"
+                ),
+                "WATSONX_URL": SecretDemand(
+                    name="WatsonX URL",
+                    description="Base URL for WatsonX instance"
+                ),
+                # GitHub Keys
+                "GITHUB_PAT": SecretDemand(
+                    name="GitHub Personal Access Token",
+                    description="Personal access token for GitHub API"
+                ),
+                # OSS Index Keys
+                "OSS_INDEX_API": SecretDemand(
+                    name="OSS Index API Key",
+                    description="API key for Sonatype OSS Index"
+                ),
+                "OSS_INDEX_EMAIL": SecretDemand(
+                    name="OSS Index Email",
+                    description="Email used for OSS Index account"
+                ),
+                }
+            )
+        ),
+    ],
     form: Annotated[
         FormExtensionServer,
         FormExtensionSpec(
@@ -158,9 +204,9 @@ async def Dependency_Vulnerability_Agent(
                         col_span=2,
                     ),
                     CheckboxField(
-                        id="llm_key_from_env",
-                        label="LLM Key Source",
-                        content="Use ENV Vars to Set Key",
+                        id="terms",
+                        label="Terms",
+                        content="I agree to the terms and conditions of this agent acting autonomously",
                         col_span=1,
                     )
                     ],
@@ -169,7 +215,10 @@ async def Dependency_Vulnerability_Agent(
         ),
     ],
 ):
-    print("Parsing Values")
+    
+    """Manager agent that hands off to specialty agents to complete the task"""
+
+    print("Parsing Values From Form")
     # Parse the form data from the initial message
     form_data = form.parse_form_response(message=message)
 
@@ -177,54 +226,113 @@ async def Dependency_Vulnerability_Agent(
     repo = form_data.values['Repo'].value
     issue_style = form_data.values['Issue_Style'].value
     
-
+    async def get_secret(key: str):
+        """Get secret from secrets extension"""
+        # Check if secret is pre-configured
+        if secrets and secrets.data and secrets.data.secret_fulfillments:
+            if key in secrets.data.secret_fulfillments:
+                return secrets.data.secret_fulfillments[key].secret
+        
+        runtime_secrets = await secrets.request_secrets(
+            params=SecretsServiceExtensionParams(
+                secret_demands={key: SecretDemand(
+                    description=f"Required {key}",
+                    name=key.replace("_", " ").title()
+                )}
+            )
+        )
+        if runtime_secrets and runtime_secrets.secret_fulfillments:
+            return runtime_secrets.secret_fulfillments[key].secret
+        
+        return None
+    
     llm_provider= form_data.values['LLM_Source'].value[0]
-    llm_key_from_env = form_data.values['llm_key_from_env'].value
+
+    # llm_key_from_env = form_data.values['llm_key_from_env'].value
 
     print("Repo: ", repo, " Issue Style: ", issue_style)
     print("LLM Provider: ", llm_provider)
 
-    dependency_tool = GitHubUvLockReaderURLMinimal()
-    oss_index_tool = OSSIndexFromContextTool()
 
     # Ollama - No parameters required
-    if llm_provider=="ollama":
-        model="granite4:tiny-h"
-        #model="granite3.3"
-        provider_model=llm_provider+":"+model
-        #!ollama pull $model
-        llm=ChatModel.from_name(provider_model, ChatModelParameters(temperature=0))
-    # OpenAI - Place OpenAI API Key in Colab Secrets (key icon) as OPENAI_KEY
-    elif llm_provider=="openai":
-        model="gpt-5-mini"
-        provider_model=llm_provider+":"+model
-        api_key=os.getenv('OPENAI_API_KEY') #Set secret value using key in left menu
-        llm=ChatModel.from_name(provider_model, ChatModelParameters(temperature=1), api_key=api_key, stream=True)
-    # WatsonX - Place Project ID, API Key and WatsonX URL in Colab Secrets (key icon)
-    elif llm_provider=="watsonx":
-        model="ibm/granite-3-8b-instruct"
-        provider_model=llm_provider+":"+model
-        project_id = os.getenv('WATSONX_PROJECT_ID')  #Set secret value using key in left menu
-        api_key = os.getenv('WATSONX_APIKEY')         #Set secret value using key in left menu
-        base_url = os.getenv('WATSONX_URL')           #Set secret value using key in left menu
-        llm=ChatModel.from_name(provider_model, ChatModelParameters(temperature=0), project_id=project_id, api_key=api_key, base_url=base_url)
-    else:
-        print("Provider " + llm_provider + " undefined")
+    if llm_provider == "ollama":
+        model = "granite4:tiny-h"
+        provider_model = llm_provider + ":" + model
+        llm = ChatModel.from_name(provider_model, ChatModelParameters(temperature=0))
 
-    """Manager agent that hands off to specialty agents to complete the task"""
+    # OpenAI - Place OpenAI API Key in Colab Secrets (key icon) as OPENAI_KEY
+    elif llm_provider == "openai":
+        model = "gpt-5-mini"
+        provider_model = llm_provider + ":" + model
+        yield trajectory.trajectory_metadata(title="Secret", content="Getting OpenAI API key")
+        api_key = await get_secret('OPENAI_API_KEY')
+        
+        if not api_key:
+            yield "OpenAI API key is required but not provided"
+            return
+        
+        llm = ChatModel.from_name(
+            provider_model, 
+            ChatModelParameters(temperature=1), 
+            api_key=api_key, 
+            stream=True
+        )
+
+    # WatsonX - Place Project ID, API Key and WatsonX URL in Colab Secrets (key icon)
+    elif llm_provider == "watsonx":
+        model = "ibm/granite-3-8b-instruct"
+        provider_model = llm_provider + ":" + model
+        
+        # CHANGE THESE LINES - use get_secret instead of os.getenv
+        project_id = await get_secret('WATSONX_PROJECT_ID')
+        api_key = await get_secret('WATSONX_APIKEY')
+        base_url = await get_secret('WATSONX_URL')
+        
+        if not all([project_id, api_key, base_url]):
+            yield "WatsonX credentials (project ID, API key, and URL) are required but not provided"
+            return
+        
+        llm = ChatModel.from_name(
+            provider_model, 
+            ChatModelParameters(temperature=0), 
+            project_id=project_id, 
+            api_key=api_key, 
+            base_url=base_url
+        )
+    else:
+        yield f"Provider {llm_provider} undefined"
+        return
+    
+    # Get GitHub secrets
+    github_pat_key = await get_secret('GITHUB_PAT')
+
+    # Get OSS Index secrets  
+    oss_api_key = await get_secret('OSS_INDEX_API')
+    oss_email_key = await get_secret('OSS_INDEX_EMAIL')
+
+    # Check if required secrets are available
+    if not github_pat_key:
+        yield "GitHub Personal Access Token is required"
+        return
+
+    if not all([oss_api_key, oss_email_key]):
+        yield "OSS Index API key and email are required"
+        return
+    
+    dependency_tool = GitHubUvLockReaderURLMinimal()
+    oss_index_tool = OSSIndexFromContextTool(api_key=oss_api_key, email=oss_email_key)
+
     instructions = """
         You are an AI agent responsible for finding dependencies that have vulnerabilitites and writing github issues to remediate them.
         Summarize the vulnerability scan and GitHub issues created.
 
-        IMPORTANT: Include markdown citations for all sources:
-        - Link to repository analyzed using [Repository](repo-url)
-        - Link to created GitHub issues using [Issue #123: Title](github-issue-url)
-        - Link to OSS Index reports using [package-name vulnerability report](reference-url)
+        CRITICAL: ALL URLs must be formatted as markdown links: [descriptive text](url)
+        Never include plain URLs - always wrap them in markdown link syntax.
 
-        Example:
-        "Found 1 vulnerabilty in [Repository](https://github.com/user/repo)
-        Created [GitHub Issue #45: Fix numpy vulnerability](https://github.com/user/repo/issues/45)
-        Found vulnerability [CVE-2021-34141 in numpy@1.21.1](https://ossindex.sonatype.org/vulnerability/CVE-2021-34141)"
+        Examples:
+        - Repository: [bad-repo](https://github.com/KenOcheltree/bad-repo)
+        - Issue: [Issue #45: Fix numpy vulnerability](https://github.com/user/repo/issues/45)  
+        - CVE: [CVE-2021-34141](https://ossindex.sonatype.org/vulnerability/CVE-2021-34141)
         """
     
     memory = get_memory(context)
@@ -233,7 +341,6 @@ async def Dependency_Vulnerability_Agent(
     history = [message async for message in context.load_history() if isinstance(message, Message) and message.parts]
     await memory.add_many(to_framework_message(item) for item in history)
     
-
     
     user_message = json.dumps(
         {
@@ -268,7 +375,7 @@ async def Dependency_Vulnerability_Agent(
     yield Message(
         role="agent", 
         message_id=str(uuid.uuid4()), 
-        parts=[TextPart(text=response_text)]
+        parts=[TextPart(text=clean_text)]
     )
 
 
