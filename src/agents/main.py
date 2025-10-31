@@ -6,11 +6,11 @@ import re
 from a2a.types import Message
 from a2a.utils.message import get_message_text
 from beeai_framework.backend import ChatModel, ChatModelParameters
+from beeai_framework.adapters.openai import OpenAIChatModel
 from beeai_framework.backend.message import AssistantMessage, UserMessage
 from beeai_framework.memory import UnconstrainedMemory
 from beeai_framework.agents.requirement import RequirementAgent
 from beeai_framework.agents.requirement.requirements.conditional import ConditionalRequirement
-from beeai_framework.agents.requirement.requirements.ask_permission import AskPermissionRequirement
 from beeai_framework.middleware.trajectory import GlobalTrajectoryMiddleware
 from beeai_framework.tools.think import ThinkTool
 from agentstack_sdk.server import Server
@@ -138,28 +138,17 @@ async def Dependency_Vulnerability_Agent(
     context: RunContext,
     citation: Annotated[CitationExtensionServer, CitationExtensionSpec()],
     trajectory: Annotated[TrajectoryExtensionServer, TrajectoryExtensionSpec()],
+    llm: Annotated[
+        LLMServiceExtensionServer, 
+        LLMServiceExtensionSpec.single_demand(
+            suggested=("openai/gpt-5-mini",)
+        )
+    ],
     secrets: Annotated[
         SecretsExtensionServer,
         SecretsExtensionSpec(
             params=SecretsServiceExtensionParams(
                 secret_demands={
-                    # LLM Keys
-                    "OPENAI_API_KEY": SecretDemand(
-                        name="OpenAI API Key",
-                        description="API key for OpenAI services"
-                    ),
-                    "WATSONX_PROJECT_ID": SecretDemand(
-                        name="WatsonX Project ID",
-                        description="Project ID for WatsonX"
-                    ),
-                    "WATSONX_APIKEY": SecretDemand(
-                        name="WatsonX API Key",
-                        description="API key for WatsonX"
-                    ),
-                    "WATSONX_URL": SecretDemand(
-                        name="WatsonX URL",
-                        description="Base URL for WatsonX instance"
-                    ),
                     # GitHub Keys
                     "GITHUB_PAT": SecretDemand(
                         name="GitHub Personal Access Token",
@@ -196,16 +185,6 @@ async def Dependency_Vulnerability_Agent(
                         ],
                         col_span=2,
                     ),
-                    MultiSelectField(
-                        id="LLM_Source",
-                        label="LLM Source",
-                        options=[
-                            OptionItem(id="openai", label="OpenAI"),
-                            OptionItem(id="watsonx", label="WatsonX"),
-                            OptionItem(id="ollama", label="Ollama"),
-                        ],
-                        col_span=2,
-                    ),
                     CheckboxField(
                         id="terms",
                         label="Terms",
@@ -229,6 +208,7 @@ async def Dependency_Vulnerability_Agent(
     repo = form_data.values['Repo'].value
     issue_style = form_data.values['Issue_Style'].value
     
+    #Get secrets from platform or request them
     async def get_secret(key: str):
         """Get secret from secrets extension"""
         # Check if secret is pre-configured
@@ -249,63 +229,6 @@ async def Dependency_Vulnerability_Agent(
         
         return None
     
-    llm_provider= form_data.values['LLM_Source'].value[0]
-
-    # llm_key_from_env = form_data.values['llm_key_from_env'].value
-
-    print("Repo: ", repo, " Issue Style: ", issue_style)
-    print("LLM Provider: ", llm_provider)
-
-
-    # Ollama - No parameters required
-    if llm_provider == "ollama":
-        model = "granite4:tiny-h"
-        provider_model = llm_provider + ":" + model
-        llm = ChatModel.from_name(provider_model, ChatModelParameters(temperature=0))
-
-    # OpenAI - Place OpenAI API Key in Colab Secrets (key icon) as OPENAI_KEY
-    elif llm_provider == "openai":
-        model = "gpt-5-mini"
-        provider_model = llm_provider + ":" + model
-        yield trajectory.trajectory_metadata(title="Secret", content="Getting OpenAI API key")
-        api_key = await get_secret('OPENAI_API_KEY')
-        
-        if not api_key:
-            yield "OpenAI API key is required but not provided"
-            return
-        
-        llm = ChatModel.from_name(
-            provider_model, 
-            ChatModelParameters(temperature=1), 
-            api_key=api_key, 
-            stream=True
-        )
-
-
-    # WatsonX - Place Project ID, API Key and WatsonX URL in Colab Secrets (key icon)
-    elif llm_provider == "watsonx":
-        model = "ibm/granite-3-8b-instruct"
-        provider_model = llm_provider + ":" + model
-        
-        # CHANGE THESE LINES - use get_secret instead of os.getenv
-        project_id = await get_secret('WATSONX_PROJECT_ID')
-        api_key = await get_secret('WATSONX_APIKEY')
-        base_url = await get_secret('WATSONX_URL')
-        
-        if not all([project_id, api_key, base_url]):
-            yield "WatsonX credentials (project ID, API key, and URL) are required but not provided"
-            return
-        
-        llm = ChatModel.from_name(
-            provider_model, 
-            ChatModelParameters(temperature=0), 
-            project_id=project_id, 
-            api_key=api_key, 
-            base_url=base_url
-        )
-    else:
-        yield f"Provider {llm_provider} undefined"
-        return
     
     # Get GitHub secrets
     github_pat_key = await get_secret('GITHUB_PAT')
@@ -322,11 +245,11 @@ async def Dependency_Vulnerability_Agent(
     if not all([oss_api_key, oss_email_key]):
         yield "OSS Index API key and email are required"
         return
+        
     
     """Create and configure the issue workflow management agent."""
     tools = await session_manager.get_tools(github_pat_key)
     try:
-        tools = await get_tools_by_names(tools, ["issue_write", "list_issue_types", "list_label"])
         
         issue_write = None
         list_issue_types = None
@@ -347,12 +270,47 @@ async def Dependency_Vulnerability_Agent(
     dependency_tool = GitHubUvLockReaderURLMinimal()
     oss_index_tool = OSSIndexFromContextTool(api_key=oss_api_key, email=oss_email_key)
 
+
+    #checks that the llm is configured in the platform and creates the llm_client instance
+    try:
+        if not llm or not llm.data:
+            raise ValueError("LLM service extension is required but not available")
+        
+        llm_config = llm.data.llm_fulfillments.get("default")
+        
+        if not llm_config:
+            raise ValueError("LLM service extension provided but no fulfillment available")
+        
+        yield trajectory.trajectory_metadata(
+            title="LLM Configured",
+            content=f"Using model: {llm_config.api_model}"
+        )
+                
+        # Create the actual chat model instance to pass to your agent
+        llm_client = OpenAIChatModel(
+            model_id=llm_config.api_model,
+            base_url=llm_config.api_base,
+            api_key=llm_config.api_key,
+            parameters=ChatModelParameters(temperature=1),
+            tool_choice_support={"auto","required"}
+            )
+        
+    except Exception as e:
+        yield trajectory.trajectory_metadata(
+            title="LLM Error",
+            content=f"Failed to configure LLM: {e}"
+        )
+        yield f"Error configuring LLM: {e}"
+        return
+
     instructions = """
         You are an AI agent responsible for finding dependencies that have vulnerabilitites and writing github issues to remediate them.
         Summarize the vulnerability scan and GitHub issues created.
 
-        CRITICAL: ALL URLs must be formatted as markdown links: [descriptive text](url)
-        Never include plain URLs - always wrap them in markdown link syntax.
+        CRITICAL: 
+        - ALL URLs must be formatted as markdown links: [descriptive text](url)
+        - Never include plain URLs - always wrap them in markdown link syntax.
+        - If no vulnerabilities are found, don't write an issue and create it in the repo. Instead just mention no vulnerabilitie for found and be concise.
 
         Examples:
         - Repository: [bad-repo](https://github.com/KenOcheltree/bad-repo)
@@ -374,7 +332,7 @@ async def Dependency_Vulnerability_Agent(
         }
     )
     agent = RequirementAgent(
-        llm=llm,
+        llm=llm_client,
         memory=memory,
         tools=[ThinkTool(), dependency_tool, oss_index_tool, issue_write],
         instructions=instructions,
