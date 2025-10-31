@@ -113,7 +113,7 @@ def extract_citations(text: str, vulnerability_results=None) -> tuple[list[dict]
             ),
         ],
         author={
-            "name": "Sandi Besen and Kenneth Olcheltree"
+            "name": "Sandi Besen and Kenneth Ocheltree"
         },
         source_code_url="https://github.com/sandijean90/VulnerabilityAgent"
     ),
