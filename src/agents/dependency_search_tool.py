@@ -53,8 +53,8 @@ class Package(BaseModel):
 class OSSIndexInput(BaseModel):
     packages: List[Package]
     # Optional auth (recommended for higher rate limits). Email is the Basic auth username; token can replace password. :contentReference[oaicite:3]{index=3}
-    auth_email: Optional[str] =  os.getenv("OSS_INDEX_EMAIL", None)
-    auth_token: Optional[str] = os.getenv("OSS_INDEX_API", None)
+    auth_email: Optional[str] = None
+    auth_token: Optional[str] = None
     # Tuning
     timeout_seconds: float = 30.0
     max_batch_size: int = 128  # Per OSS Index limit. :contentReference[oaicite:4]{index=4}
@@ -298,8 +298,23 @@ class OSSIndexFromContextTool(Tool[AgentContextPayload, ToolRunOptions, OSSIndex
     )
     input_schema = AgentContextPayload
 
-    def __init__(self, options: dict[str, Any] | None = None) -> None:
-        super().__init__(options)
+    def __init__(
+            self, 
+        api_key: Optional[str] = None, 
+        email: Optional[str] = None,
+        options: dict[str, Any] | None = None
+        ) -> None:
+        """
+        Initialize the tool.
+        
+        Args:
+            api_key: OSS Index API key/token
+            email: OSS Index email (used for Basic auth)
+            options: Additional tool options
+        """
+        self.api_key = api_key
+        self.email = email
+        super().__init__(options)  # ✓ STILL HERE - DON'T REMOVE!
         self._oss_tool = OSSIndexTool(options)
 
     def _create_emitter(self) -> Emitter:
@@ -313,7 +328,7 @@ class OSSIndexFromContextTool(Tool[AgentContextPayload, ToolRunOptions, OSSIndex
     ) -> OSSIndexOutput:
         oss_input = input_from_agent_context(
             input,
-            email=os.getenv("OSS_INDEX_EMAIL"),
-            token=os.getenv("OSS_INDEX_API"),
+            email=self.email,
+            token=self.api_key,
         )
         return await self._oss_tool._run(oss_input, options, context)
