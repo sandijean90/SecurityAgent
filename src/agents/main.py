@@ -15,12 +15,15 @@ from beeai_framework.middleware.trajectory import GlobalTrajectoryMiddleware
 from beeai_framework.tools.think import ThinkTool
 from agentstack_sdk.server import Server
 from agentstack_sdk.server.context import RunContext
+from beeai_framework.agents.requirement.events import RequirementAgentFinalAnswerEvent
+from beeai_framework.emitter import EventMeta
 from agentstack_sdk.a2a.types import AgentMessage
 from agentstack_sdk.a2a.extensions import (
     LLMServiceExtensionServer,LLMServiceExtensionSpec,
     AgentDetail, AgentDetailContributor, AgentDetailTool,
     TrajectoryExtensionServer, TrajectoryExtensionSpec,
     )
+from beeai_framework.agents.types import AgentExecutionConfig
 from agentstack_sdk.a2a.extensions.auth.secrets import (
     SecretDemand,
     SecretsExtensionServer,
@@ -141,7 +144,7 @@ async def Dependency_Vulnerability_Agent(
     llm: Annotated[
         LLMServiceExtensionServer, 
         LLMServiceExtensionSpec.single_demand(
-            suggested=("openai/gpt-5-mini",)
+            suggested=("openai/gpt-4.1-mini",)
         )
     ],
     secrets: Annotated[
@@ -197,16 +200,100 @@ async def Dependency_Vulnerability_Agent(
         ),
     ],
 ):
+    """
+    Automated dependency vulnerability scanner and GitHub issue creator.
     
-    """Manager agent that hands off to specialty agents to complete the task"""
+    This agent performs comprehensive security analysis of Python projects by:
+    
+    ## Core Workflow
+    
+    1. **Dependency Extraction**: Scans the target GitHub repository for uv.lock files and extracts 
+       all Python package dependencies with their specific versions.
+    
+    2. **Vulnerability Detection**: Queries the Sonatype OSS Index API to identify known security 
+       vulnerabilities (CVEs) affecting the discovered dependencies.
+    
+    3. **Automated Remediation**: Automatically creates detailed GitHub issues in the target repository 
+       for each identified vulnerability, including:
+       - Vulnerability description and severity
+       - Affected package and version
+       - CVE references and links
+       - Recommended upgrade paths
+    
+    ## Key Features
+    
+    - **Full Transparency**: Provides real-time trajectory updates showing every step of the scanning 
+      process, from dependency extraction through issue creation.
+    
+    - **Flexible Issue Styles**: Supports both concise and detailed GitHub issue formats to match 
+      your team's preferences.
+    
+    - **Smart Tool Orchestration**: Uses BeeAI Framework's RequirementAgent with conditional requirements 
+      to ensure tools execute in the correct order (Think → Scan Dependencies → Check Vulnerabilities → 
+      Create Issues).
+    
+    - **Citation Support**: All vulnerability references and GitHub issues are properly formatted as 
+      markdown links with citation metadata for easy tracking.
+    
+    - **Session Persistence**: Maintains conversation context across multiple interactions using 
+      UnconstrainedMemory for follow-up questions and iterative scanning.
+    
+    ## Required Authentication
+    
+    - **GitHub Personal Access Token**: For reading repository contents and creating issues 
+      (requires 'repo' scope)
+    - **OSS Index Credentials**: API key and email for vulnerability database access 
+      (free registration at https://ossindex.sonatype.org/)
+    
+    ## Usage
+    
+    Simply provide a GitHub repository URL through the form interface. The agent will automatically:
+    - Locate and parse uv.lock dependency files
+    - Cross-reference all dependencies against known vulnerability databases
+    - Generate and submit GitHub issues for any security concerns found
+    - Provide a comprehensive summary with links to all created issues
+    
+    ## Technical Stack
+    
+    - **Framework**: BeeAI Framework with RequirementAgent for rule-based tool execution
+    - **Tools**: ThinkTool (reasoning), GitHubUvLockReader (dependency extraction), 
+      OSSIndexTool (vulnerability scanning), GitHub API (issue creation)
+    - **Extensions**: Form input, secrets management, trajectory tracking, citation formatting, 
+      LLM service integration
+    
+    Perfect for security-conscious development teams who want automated, proactive vulnerability 
+    management in their Python projects.
+    """
 
-    print("Parsing Values From Form")
+    # Initial setup trajectory
+    yield trajectory.trajectory_metadata(
+        title="Initializing",
+        content="Starting Dependency Defender and parsing form data"
+    )
+
     # Parse the form data from the initial message
-    form_data = form.parse_form_response(message=message)
-
-    # Access the form values
-    repo = form_data.values['Repo'].value
-    issue_style = form_data.values['Issue_Style'].value
+    try:
+        form_data = form.parse_form_response(message=message)
+        repo = form_data.values['Repo'].value
+        issue_style = form_data.values['Issue_Style'].value
+        
+        yield trajectory.trajectory_metadata(
+            title="Form Parsed",
+            content=f"Repository: {repo} | Issue Style: {', '.join(issue_style) if isinstance(issue_style, list) else issue_style}"
+        )
+    except Exception as e:
+        yield trajectory.trajectory_metadata(
+            title="Form Parsing Error",
+            content=f"Failed to parse form data: {e}"
+        )
+        yield f"Error parsing form: {e}"
+        return
+    
+    # Secret retrieval trajectory
+    yield trajectory.trajectory_metadata(
+        title="Retrieving Secrets",
+        content="Fetching GitHub PAT and OSS Index credentials"
+    )
     
     #Get secrets from platform or request them
     async def get_secret(key: str):
@@ -230,24 +317,46 @@ async def Dependency_Vulnerability_Agent(
         return None
     
     
-    # Get GitHub secrets
-    github_pat_key = await get_secret('GITHUB_PAT')
+    try:
+        # Get GitHub secrets
+        github_pat_key = await get_secret('GITHUB_PAT')
 
-    # Get OSS Index secrets  
-    oss_api_key = await get_secret('OSS_INDEX_API')
-    oss_email_key = await get_secret('OSS_INDEX_EMAIL')
+        # Get OSS Index secrets  
+        oss_api_key = await get_secret('OSS_INDEX_API')
+        oss_email_key = await get_secret('OSS_INDEX_EMAIL')
 
-    # Check if required secrets are available
-    if not github_pat_key:
-        yield "GitHub Personal Access Token is required"
-        return
+        # Check if required secrets are available
+        if not github_pat_key:
+            yield trajectory.trajectory_metadata(
+                title="Authentication Error",
+                content="GitHub Personal Access Token is missing"
+            )
+            yield "GitHub Personal Access Token is required"
+            return
 
-    if not all([oss_api_key, oss_email_key]):
-        yield "OSS Index API key and email are required"
+        if not all([oss_api_key, oss_email_key]):
+            yield trajectory.trajectory_metadata(
+                title="Authentication Error",
+                content="OSS Index credentials are missing"
+            )
+            yield "OSS Index API key and email are required"
+            return
+        
+        yield trajectory.trajectory_metadata(
+            title="Secrets Retrieved",
+            content="Successfully authenticated with GitHub and OSS Index"
+        )
+        
+    except Exception as e:
+        yield trajectory.trajectory_metadata(
+            title="Secret Retrieval Error",
+            content=f"Failed to retrieve secrets: {e}"
+        )
+        yield f"Error retrieving secrets: {e}"
         return
         
-    
-    """Create and configure the issue workflow management agent."""
+        
+    #Setting up the GitHub writer tool and MCP server
     tools = await session_manager.get_tools(github_pat_key)
     try:
         
@@ -291,7 +400,7 @@ async def Dependency_Vulnerability_Agent(
             model_id=llm_config.api_model,
             base_url=llm_config.api_base,
             api_key=llm_config.api_key,
-            parameters=ChatModelParameters(temperature=1),
+            parameters=ChatModelParameters(temperature=1, stream=True),
             tool_choice_support={"auto","required"}
             )
         
@@ -304,18 +413,25 @@ async def Dependency_Vulnerability_Agent(
         return
 
     instructions = """
-        You are an AI agent responsible for finding dependencies that have vulnerabilitites and writing github issues to remediate them.
+        You are an AI agent responsible for finding dependencies that have vulnerabilities and writing github issues to remediate them.
         Summarize the vulnerability scan and GitHub issues created.
 
-        CRITICAL: 
-        - ALL URLs must be formatted as markdown links: [descriptive text](url)
-        - Never include plain URLs - always wrap them in markdown link syntax.
-        - If no vulnerabilities are found, don't write an issue and create it in the repo. Instead just mention no vulnerabilitie for found and be concise.
+        CRITICAL FORMATTING RULE - THIS IS MANDATORY:
+        - EVERY SINGLE URL must be formatted as a markdown link: [descriptive text](url)
+        - NEVER write plain URLs like https://example.com
+        - ALWAYS wrap URLs in markdown syntax like [example](https://example.com)
 
-        Examples:
-        - Repository: [bad-repo](https://github.com/KenOcheltree/bad-repo)
-        - Issue: [Issue #45: Fix numpy vulnerability](https://github.com/user/repo/issues/45)  
+        Examples of CORRECT formatting:
+        - Repository: [KenOcheltree/good-repo](https://github.com/KenOcheltree/good-repo)
+        - Issue: [Issue #45: Fix numpy vulnerability](https://github.com/user/repo/issues/45)
         - CVE: [CVE-2021-34141](https://ossindex.sonatype.org/vulnerability/CVE-2021-34141)
+        - Package info: [anyio 4.11.0 on PyPI](https://pypi.org/project/anyio/)
+
+        Examples of INCORRECT formatting (DO NOT DO THIS):
+        - ❌ Repository: https://github.com/KenOcheltree/bad-repo
+        - ❌ Check out this link: https://example.com
+
+        If no vulnerabilities are found, still mention the repository as a markdown link and be concise about the findings.
         """
     
     memory = get_memory(context)
@@ -342,30 +458,202 @@ async def Dependency_Vulnerability_Agent(
             ConditionalRequirement(issue_write, only_after=[GitHubUvLockReaderURLMinimal,oss_index_tool]),
         ],
     )
-    response = await agent.run(user_message).middleware(GlobalTrajectoryMiddleware(included=[Tool]))
-    response_text = response.output_structured.response
 
-    citations, clean_text = extract_citations(response_text)
-
-    if citations:
-        yield trajectory.trajectory_metadata(
-            title="Citations Processed",
-            content=f"Extracted {len(citations)} citation(s) from response"
-        )
-        yield citation.citation_metadata(citations=citations)
-    
-    
-    yield Message(
-        role="agent", 
-        message_id=str(uuid.uuid4()), 
-        parts=[TextPart(text=clean_text)]
+    # Start analysis
+    yield trajectory.trajectory_metadata(
+        title="Starting Analysis",
+        content=f"Beginning vulnerability scan for repository: {repo}"
     )
 
+# Start analysis
+    yield trajectory.trajectory_metadata(
+        title="Starting Analysis",
+        content=f"Beginning vulnerability scan for repository: {repo}"
+    )
+
+    try:
+        response_text = ""
+        
+        # Define the handler function to capture response text
+        def handle_final_answer_stream(data: RequirementAgentFinalAnswerEvent, meta: EventMeta) -> None:
+            nonlocal response_text
+            if data.delta:
+                response_text += data.delta
+        
+        # Stream events with the handler registered
+        async for event, meta in agent.run(
+            user_message,
+            execution=AgentExecutionConfig(max_iterations=20, max_retries_per_step=2, total_max_retries=5)
+        ).on("final_answer", handle_final_answer_stream):
+            
+            # Stream the deltas to user in real-time
+            if meta.name == "final_answer":
+                if isinstance(event, RequirementAgentFinalAnswerEvent) and event.delta:
+                    yield event.delta
+                    continue
+            
+            # Check if a tool just finished
+            if meta.name == "success" and event.state.steps:
+                step = event.state.steps[-1]
+                if not step.tool:
+                    continue
+                
+                tool_name = step.tool.name
+                
+                # Skip final_answer tool
+                if tool_name == "final_answer":
+                    continue
+                
+                # Show trajectory for all other tools
+                if tool_name == "think":
+                    thoughts = step.input.get("thoughts", "Planning...")
+                    yield trajectory.trajectory_metadata(
+                        title="Thinking",
+                        content=thoughts[:200]
+                    )
+                
+                elif tool_name == "GitHubUvLockReaderURLMinimal":
+                    yield trajectory.trajectory_metadata(
+                        title="Scanning Dependencies",
+                        content=f"Reading uv.lock files from {repo}"
+                    )
+                
+                elif "OSSIndex" in tool_name or "oss" in tool_name.lower():
+                    yield trajectory.trajectory_metadata(
+                        title="Vulnerability Check",
+                        content="Querying Sonatype OSS Index for known CVEs"
+                    )
+                
+                elif tool_name == "issue_write":
+                    issue_title = step.input.get("title", "Vulnerability issue")
+                    yield trajectory.trajectory_metadata(
+                        title="GitHub Issue Created",
+                        content=f"Issue: {issue_title}"
+                    )
+        
+        # Process citations
+        citations, clean_text = extract_citations(response_text)
+        
+        if citations:
+            yield trajectory.trajectory_metadata(
+                title="Citations Found",
+                content=f"Extracted {len(citations)} citation(s)"
+            )
+            yield citation.citation_metadata(citations=citations)
+        
+        yield trajectory.trajectory_metadata(
+            title="Analysis Complete",
+            content="Vulnerability scan finished"
+        )
+        
+        # Store the message (content was already streamed via deltas)
+        response_message = AgentMessage(text=clean_text)
+        await context.store(response_message)
+
+    except Exception as e:
+        yield trajectory.trajectory_metadata(
+            title="Analysis Error",
+            content=f"Error: {e}"
+        )
+        yield f"Error during analysis: {e}"
+        return
+
+
+        
+   
+
+
+# #THIS IS NOT YIELDING A FINAL ANSWER BUT IS WORKING OTHERWISE (YIELDING R$EAL TIME TOOL CALLS WITH TRAJECTORY)
+#     try:
+#         response_text = ""
+        
+#         # Define the handler function to capture response text
+#         def handle_final_answer_stream(data: RequirementAgentFinalAnswerEvent, meta: EventMeta) -> None:
+#             nonlocal response_text
+#             if data.delta:
+#                 response_text += data.delta
+        
+#         # Stream events with the handler registered
+#         async for event, meta in agent.run(
+#             user_message,
+#             execution=AgentExecutionConfig(max_iterations=20, max_retries_per_step=2, total_max_retries=5)
+#         ).on("final_answer", handle_final_answer_stream):  # <-- IMPORTANT: Register the handler
+            
+#             # Stream the deltas to user in real-time
+#             if meta.name == "final_answer":
+#                 if isinstance(event, RequirementAgentFinalAnswerEvent) and event.delta:
+#                     yield event.delta
+#                     continue
+            
+#             # Check if a tool just finished
+#             if meta.name == "success" and event.state.steps:
+#                 step = event.state.steps[-1]
+#                 if not step.tool:
+#                     continue
+                
+#                 tool_name = step.tool.name
+                
+#                 # Skip final_answer tool
+#                 if tool_name == "final_answer":
+#                     continue
+                
+#                 # Show trajectory for all other tools
+#                 if tool_name == "think":
+#                     thoughts = step.input.get("thoughts", "Planning...")
+#                     yield trajectory.trajectory_metadata(
+#                         title="Thinking",
+#                         content=thoughts[:200]
+#                     )
+                
+#                 elif tool_name == "GitHubUvLockReaderURLMinimal":
+#                     yield trajectory.trajectory_metadata(
+#                         title="Scanning Dependencies",
+#                         content=f"Reading uv.lock files from {repo}"
+#                     )
+                
+#                 elif "OSSIndex" in tool_name or "oss" in tool_name.lower():
+#                     yield trajectory.trajectory_metadata(
+#                         title="Vulnerability Check",
+#                         content="Querying Sonatype OSS Index for known CVEs"
+#                     )
+                
+#                 elif tool_name == "issue_write":
+#                     issue_title = step.input.get("title", "Vulnerability issue")
+#                     yield trajectory.trajectory_metadata(
+#                         title="GitHub Issue Created",
+#                         content=f"Issue: {issue_title}"
+#                     )
+        
+#         # Process citations
+#         citations, clean_text = extract_citations(response_text)
+        
+#         if citations:
+#             yield trajectory.trajectory_metadata(
+#                 title="Citations Found",
+#                 content=f"Extracted {len(citations)} citation(s)"
+#             )
+#             yield citation.citation_metadata(citations=citations)
+        
+#         yield trajectory.trajectory_metadata(
+#             title="Analysis Complete",
+#             content="Vulnerability scan finished"
+#         )
+        
+#         # Store the message (DON'T yield Message at end - content was already streamed)
+#         response_message = AgentMessage(text=clean_text)
+#         await context.store(response_message)
+
+#     except Exception as e:
+#         yield trajectory.trajectory_metadata(
+#             title="Analysis Error",
+#             content=f"Error: {e}"
+#         )
+#         yield f"Error during analysis: {e}"
+#         return
 
 
 def main():
     server.run(host=os.getenv("HOST", "127.0.0.1"), port=int(os.getenv("PORT", 8000)))
-
 
 
 if __name__ == "__main__":
