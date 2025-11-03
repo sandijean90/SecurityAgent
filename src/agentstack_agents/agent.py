@@ -401,7 +401,7 @@ async def Dependency_Vulnerability_Agent(
             model_id=llm_config.api_model,
             base_url=llm_config.api_base,
             api_key=llm_config.api_key,
-            parameters=ChatModelParameters(temperature=1, stream=True),
+            parameters=ChatModelParameters(temperature=0, stream=True),
             tool_choice_support={"auto","required"}
             )
         
