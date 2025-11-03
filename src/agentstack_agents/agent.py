@@ -144,7 +144,8 @@ async def Dependency_Vulnerability_Agent(
     llm: Annotated[
         LLMServiceExtensionServer, 
         LLMServiceExtensionSpec.single_demand(
-            suggested=("openai/gpt-4.1-mini",)
+            suggested=("openai/gpt-oss-120b",
+                       "openai/gpt-4.1-mini")
         )
     ],
     secrets: Annotated[
