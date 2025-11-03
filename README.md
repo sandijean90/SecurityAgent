@@ -101,7 +101,7 @@ uv sync
    ```
 7. Run the agent service from this repository (this is the only executable entry point you need):
    ```bash
-   uv run src/agentstack_agents/agent.py
+   uv run -m agentstack_agents.agent
    ```
 8. In the Agent Stack UI, select the **Dependency Defender** agent and submit the form with:
    - `Repo URL` — the public GitHub repository you want to scan.
@@ -121,9 +121,9 @@ The agent orchestrates all tool calls, streams progress through trajectories, an
 - Check the analyzed repo for new issues created by the Vulnerability Agent.
 
 ## How the System Works
-1. **Form Intake** - The agent receives the repository URL and preferred issue style through the BeeAI form extension.
-2. **Secret Retrieval** - AgentStack secrets extension supplies the GitHub PAT and OSS Index credentials on demand.
-3. **Tool Preparation** - Through AgentStack, the agent builds repository-scoped MCP tools for creating issues, then instantiates the dependency reader and vulnerability scanner.
+1. **Form Intake** - The agent receives the repository URL and preferred issue style through the Agent Stack form extension.
+2. **Secret Retrieval** - AgentnStack secrets extension supplies the GitHub PAT and OSS Index credentials on demand.
+3. **Tool Preparation** - Through Agent Stack, the agent builds repository-scoped MCP tools for creating issues, then instantiates the dependency reader and vulnerability scanner.
 4. **Dependency Extraction** - `GitHubUvLockReaderURLMinimal` locates every `uv.lock` file in the target repository and returns a normalized list of packages.
 5. **Vulnerability Scan** - `OSSIndexFromContextTool` batches the package list into Sonatype OSS Index queries and captures CVE data.
 6. **Issue Creation** - When vulnerabilities exist, the agent drafts GitHub issues (concise or detailed) and files them via the MCP GitHub issue tool.
