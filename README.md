@@ -101,7 +101,7 @@ uv sync
    ```
 7. Run the agent service from this repository (this is the only executable entry point you need):
    ```bash
-   uv run src/agents/main.py
+   uv run src/agentstack_agents/agent.py
    ```
 8. In the Agent Stack UI, select the **Dependency Defender** agent and submit the form with:
    - `Repo URL` — the public GitHub repository you want to scan.
@@ -128,11 +128,3 @@ The agent orchestrates all tool calls, streams progress through trajectories, an
 5. **Vulnerability Scan** - `OSSIndexFromContextTool` batches the package list into Sonatype OSS Index queries and captures CVE data.
 6. **Issue Creation** - When vulnerabilities exist, the agent drafts GitHub issues (concise or detailed) and files them via the MCP GitHub issue tool.
 7. **Final Report** - The agent streams its reasoning, emits citation metadata for every link, and stores a final message summarizing the findings.
-
-## Relevant Modules
-- `src/agents/main.py` - Registers the **Dependency Defender** agent on BeeAI Framework + AgentStack, orchestrates tool calls, manages session memory, and streams output.
-- `src/agents/fetch_dependencies_tool.py` - GitHub UV lock reader tool that extracts dependency metadata from `uv.lock`.
-- `src/agents/dependency_search_tool.py` - OSS Index integration that converts packages into PURLs and fetches vulnerability reports with retry logic.
-- `src/agents/utils.py` - Utility helpers for wrapping MCP tools to a specific repository and shared session management.
-- `src/agents/session_manager.py` - Maintains the MCP HTTP session required for GitHub issue management tools.
-- `src/agents/github_issue_writer_agent.py` - Secondary agent for generating a single GitHub issue payload from vulnerability data (not invoked directly in the current `main.py` flow - WIP).
