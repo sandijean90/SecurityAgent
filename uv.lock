@@ -19,6 +19,33 @@ wheels = [
 ]
 
 [[package]]
+name = "agentstack-agents"
+version = "0.1.0"
+source = { editable = "." }
+dependencies = [
+    { name = "agentstack-sdk" },
+    { name = "beeai-framework" },
+    { name = "openinference-instrumentation-beeai" },
+    { name = "pyyaml" },
+]
+
+[package.dev-dependencies]
+dev = [
+    { name = "watchfiles" },
+]
+
+[package.metadata]
+requires-dist = [
+    { name = "agentstack-sdk", specifier = ">=0.4.0" },
+    { name = "beeai-framework", specifier = ">=0.1.59" },
+    { name = "openinference-instrumentation-beeai", specifier = ">=0.1.13" },
+    { name = "pyyaml", specifier = ">=6.0.3" },
+]
+
+[package.metadata.requires-dev]
+dev = [{ name = "watchfiles", specifier = ">=1.1.0" }]
+
+[[package]]
 name = "agentstack-sdk"
 version = "0.4.0"
 source = { registry = "https://pypi.org/simple" }
@@ -1757,33 +1784,6 @@ sdist = { url = "https://files.pythonhosted.org/packages/cb/ce/f06b84e2697fef468
 wheels = [
     { url = "https://files.pythonhosted.org/packages/ee/d9/d88e73ca598f4f6ff671fb5fde8a32925c2e08a637303a1d12883c7305fa/uvicorn-0.38.0-py3-none-any.whl", hash = "sha256:48c0afd214ceb59340075b4a052ea1ee91c16fbc2a9b1469cca0e54566977b02", size = 68109, upload-time = "2025-10-18T13:46:42.958Z" },
 ]
-
-[[package]]
-name = "vulnerabiltyagent"
-version = "0.1.0"
-source = { editable = "." }
-dependencies = [
-    { name = "agentstack-sdk" },
-    { name = "beeai-framework" },
-    { name = "openinference-instrumentation-beeai" },
-    { name = "pyyaml" },
-]
-
-[package.dev-dependencies]
-dev = [
-    { name = "watchfiles" },
-]
-
-[package.metadata]
-requires-dist = [
-    { name = "agentstack-sdk", specifier = ">=0.4.0" },
-    { name = "beeai-framework", specifier = ">=0.1.59" },
-    { name = "openinference-instrumentation-beeai", specifier = ">=0.1.13" },
-    { name = "pyyaml", specifier = ">=6.0.3" },
-]
-
-[package.metadata.requires-dev]
-dev = [{ name = "watchfiles", specifier = ">=1.1.0" }]
 
 [[package]]
 name = "watchfiles"
