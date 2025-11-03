@@ -18,18 +18,6 @@ An autonomous agent built on the [BeeAI Framework](https://github.com/i-am-bee/b
   - Sonatype OSS Index account (free).
   - LLM provider credentials (tested with `openai/gpt-4.1-mini` via Agent Stack Platform).
 
-## Install Dependencies
-Clone and enter the project
-```bash
-git clone https://github.com/sandijean90/VulnerabilityAgent.git
-cd VulnerabilityAgent
-```
-
-Create the environment and install dependencies (uv preferred)
-```bash
-uv sync
-```
-
 ## Required Secrets
 All secrets can be provided through the Agent Stack UI when prompted.
 
@@ -37,46 +25,92 @@ All secrets can be provided through the Agent Stack UI when prompted.
   - Go to [https://github.com/settings/tokens](https://github.com/settings/tokens).
   - Create a classic token with the `repo` scope (minimum: `repo:status`, `public_repo`, and `repo_deployment` if you expect to work with private repositories).
   - Save the token for later; GitHub only shows it once.
+  Note: you can also create a fine-grained GITHUB_PAT, but ensure that it is scoped to the proper repo and has read and write permissions set.
 
 - **OSS Index Credentials (`OSS_INDEX_API`, `OSS_INDEX_EMAIL`)**
   - Register or sign in at [https://ossindex.sonatype.org](https://ossindex.sonatype.org).
   - Navigate to *Account* -> *API Tokens* and generate a token.
   - Use your account email for `OSS_INDEX_EMAIL` and the generated token for `OSS_INDEX_API`.
 
-- **LLM Provider (OpenAI recommended)**
+- **OpenAI Key (to configure on Agent Stack Platform)**
   - Follow the instructions below to set your preferred provider and supply the API key.
 
 
-## Running the Agent (main entry point only)
+## Running the Agent
+!! NOTE: The Agent will write github issues on your behalf! If you do not want this, don't run the agent!
 
-1. Install the AgentStack platform per the quickstart instructions:
-   [AgentStack Quickstart](https://agentstack.beeai.dev/introduction/quickstart)
+### Platform-Managed Agent
 
-3. Start the Agent Stack platform with observability (optional but recommended):
+1. Install the AgentStack platform per the quickstart instructions: [AgentStack Quickstart](https://agentstack.beeai.dev/introduction/quickstart).
+2. Start the Agent Stack platform with observability (optional but recommended):
    ```bash
    agentstack platform start --set phoenix.enabled=true
    ```
-2. Complete the Agent Stack model setup:
+3. Complete the Agent Stack model setup with OpenAI as your provider:
    ```bash
    agentstack model setup
    ```
-3. After model setup completes, launch the Agent Stack UI:
+4. After model setup completes, launch the Agent Stack UI:
    ```bash
    agentstack ui
    ```
-4. Run the agent service from this repository (this is the only executable entry point you need):
+
+5. On the Agent Stack UI Home page slect `Add new agent`on the top right
+
+6. Select the docker image option and paste in:
    ```bash
-   uv run src/agents/main.py
+   ghcr.io/sandijean90/vulnerabilityagent/my-agent:0.0.3
    ```
-5. In the Agent Stack UI, select the **Dependency Defender** agent. Submit the form with:
-   - `Repo URL` - the public GitHub repository you want to scan.
-   - `Github Issue Style` - choose `concise` or `detailed` to control the generated issue format.
-   - Model (recommended/default gpt-4.1-mini)
+7. Press continue and your agent should build in the platform! Refresh your home page to see the **Dependency Defender**!
+
+8. In the Agent Stack UI, select the **Dependency Defender** agent and submit the form with:
+   - `Repo URL` — the public GitHub repository you want to scan.
+   - `Github Issue Style` — choose `concise` or `detailed` to control the generated issue format.
+   - Model (recommended/default gpt-4.1-mini).
    - Accept the terms checkbox.
 
 The agent orchestrates all tool calls, streams progress through trajectories, and posts a final summary with citation metadata.
 
-!! NOTE: The Agent will write github issues on your behalf! If you do not want this, don't run the agent!
+
+### Self-Managed Agent Service
+
+
+1. Clone and enter the project:
+```bash
+git clone https://github.com/sandijean90/VulnerabilityAgent.git
+cd VulnerabilityAgent
+```
+
+2. Create the environment and install dependencies (uv preferred):
+```bash
+uv sync
+```
+
+3. Install the AgentStack platform per the quickstart instructions: [AgentStack Quickstart](https://agentstack.beeai.dev/introduction/quickstart).
+4. Start the Agent Stack platform with observability (optional but recommended):
+   ```bash
+   agentstack platform start --set phoenix.enabled=true
+   ```
+5. Complete the Agent Stack model setup with OpenAI as your provider:
+   ```bash
+   agentstack model setup
+   ```
+6. After model setup completes, launch the Agent Stack UI:
+   ```bash
+   agentstack ui
+   ```
+7. Run the agent service from this repository (this is the only executable entry point you need):
+   ```bash
+   uv run src/agents/main.py
+   ```
+8. In the Agent Stack UI, select the **Dependency Defender** agent and submit the form with:
+   - `Repo URL` — the public GitHub repository you want to scan.
+   - `Github Issue Style` — choose `concise` or `detailed` to control the generated issue format.
+   - Model (recommended/default gpt-4.1-mini).
+   - Accept the terms checkbox.
+
+The agent orchestrates all tool calls, streams progress through trajectories, and posts a final summary with citation metadata.
+
 
 ### Sample Repositories for Testing
 - [https://github.com/OurRepos/bad-repo](https://github.com/OurRepos/bad-repo) - contains vulnerable dependencies to exercise issue creation.
@@ -102,4 +136,3 @@ The agent orchestrates all tool calls, streams progress through trajectories, an
 - `src/agents/utils.py` - Utility helpers for wrapping MCP tools to a specific repository and shared session management.
 - `src/agents/session_manager.py` - Maintains the MCP HTTP session required for GitHub issue management tools.
 - `src/agents/github_issue_writer_agent.py` - Secondary agent for generating a single GitHub issue payload from vulnerability data (not invoked directly in the current `main.py` flow - WIP).
-
