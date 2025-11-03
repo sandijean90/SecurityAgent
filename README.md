@@ -2,7 +2,7 @@
 
 An autonomous BeeAI agent built on the [BeeAI Framework](https://github.com/i-am-bee/beeai-framework) and [AgentStack](https://github.com/i-am-bee/agentstack) that scans a GitHub repository's Python dependencies for known vulnerabilities and files remediation issues on your behalf.
 
-![Agent workflow overview](img/img.png)
+<img src="img/img.png" alt="Agent workflow overview">
 
 ## Purpose
 - Detect vulnerable packages declared in `uv.lock` files.
@@ -12,7 +12,7 @@ An autonomous BeeAI agent built on the [BeeAI Framework](https://github.com/i-am
 ## Prerequisites
 - Python 3.13 or newer.
 - [uv](https://docs.astral.sh/uv/) (recommended) or another tool for managing virtual environments.
-- [BeeAI platform](https://docs.beeai.dev/introduction/quickstart) and CLI.
+- [Agent Stack Platform](https://docs.beeai.dev/introduction/quickstart) and CLI.
 - Access to the following external services:
   - GitHub account that can create Personal Access Tokens.
   - Sonatype OSS Index account (free).
@@ -102,5 +102,4 @@ The agent orchestrates all tool calls, streams progress through BeeAI trajectori
 - `src/agents/utils.py` - Utility helpers for wrapping MCP tools to a specific repository and shared session management.
 - `src/agents/session_manager.py` - Maintains the MCP HTTP session required for GitHub issue management tools.
 - `src/agents/github_issue_writer_agent.py` - Secondary agent for generating a single GitHub issue payload from vulnerability data (not invoked directly in the current `main.py` flow - WIP).
-
 
