@@ -79,8 +79,8 @@ The agent orchestrates all tool calls, streams progress through trajectories, an
 !! NOTE: The Agent will write github issues on your behalf! If you do not want this, don't run the agent!
 
 ### Sample Repositories for Testing
-- [KenOcheltree/bad-repo](https://github.com/KenOcheltree/bad-repo) - contains vulnerable dependencies to exercise issue creation.
-- [KenOcheltree/good-repo](https://github.com/KenOcheltree/good-repo) - clean baseline to validate the "no vulnerabilities found" path.
+- [https://github.com/OurRepos/bad-repo](https://github.com/OurRepos/bad-repo) - contains vulnerable dependencies to exercise issue creation.
+- [https://github.com/OurRepos/good-repo](https://github.com/OurRepos/good-repo) - clean baseline to validate the "no vulnerabilities found" path.
 
 ## Next Steps
 - Review the BeeAI traces at [http://localhost:6006](http://localhost:6006) (Phoenix) to audit each tool call.
