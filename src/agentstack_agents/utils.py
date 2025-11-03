@@ -9,7 +9,7 @@ from pydantic import BaseModel
 
 #from main import get_secret
 
-from session_manager import SessionManager
+from .session_manager import SessionManager
 
 load_dotenv()
 

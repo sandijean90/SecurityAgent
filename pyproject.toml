@@ -1,5 +1,5 @@
 [project]
-name = "VulnerabiltyAgent"
+name = "agentstack-agents"
 version = "0.1.0"
 description = "Add your description here"
 readme = "README.md"
@@ -12,6 +12,7 @@ dependencies = [
     "agentstack-sdk>=0.4.0",
     "beeai-framework>=0.1.59",
     "openinference-instrumentation-beeai>=0.1.13",
+    "pyyaml>=6.0.3",
 ]
 
 [tool.ruff]
@@ -19,7 +20,7 @@ line-length = 120
 target-version = "py311"
 
 [project.scripts]
-server = "agents.main:run"
+server = "agentstack_agents.agent:run"
 
 [build-system]
 requires = ["hatchling"]

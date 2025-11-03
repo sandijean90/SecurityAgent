@@ -39,10 +39,10 @@ from agentstack_sdk.a2a.extensions.ui.form import (
     )
 from a2a.types import AgentSkill, Message, Role , TextPart
 from textwrap import dedent
-from fetch_dependencies_tool import GitHubUvLockReaderURLMinimal
-from dependency_search_tool import OSSIndexFromContextTool
+from .fetch_dependencies_tool import GitHubUvLockReaderURLMinimal
+from .dependency_search_tool import OSSIndexFromContextTool
 from beeai_framework.tools import Tool
-from utils import ToolNotFoundError, create_repo_scoped_tool, get_tools_by_names, session_manager
+from .utils import ToolNotFoundError, create_repo_scoped_tool, get_tools_by_names, session_manager
 
 
 server = Server()
@@ -144,7 +144,8 @@ async def Dependency_Vulnerability_Agent(
     llm: Annotated[
         LLMServiceExtensionServer, 
         LLMServiceExtensionSpec.single_demand(
-            suggested=("openai/gpt-4.1-mini",)
+            suggested=("openai/gpt-oss-120b",
+                       "openai/gpt-4.1-mini")
         )
     ],
     secrets: Annotated[
@@ -652,9 +653,9 @@ async def Dependency_Vulnerability_Agent(
 #         return
 
 
-def main():
+def run():
     server.run(host=os.getenv("HOST", "127.0.0.1"), port=int(os.getenv("PORT", 8000)))
 
 
 if __name__ == "__main__":
-    main()
+    run()
