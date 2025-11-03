@@ -1,6 +1,6 @@
 # VulnerabilityAgent 🛡️
 
-An autonomous BeeAI agent built on the [BeeAI Framework](https://github.com/i-am-bee/beeai-framework) and [AgentStack](https://github.com/i-am-bee/agentstack) that scans a GitHub repository's Python dependencies for known vulnerabilities and files remediation issues on your behalf.
+An autonomous agent built on the [BeeAI Framework](https://github.com/i-am-bee/beeai-framework) and [AgentStack](https://github.com/i-am-bee/agentstack) that scans a GitHub repository's Python dependencies for known vulnerabilities and files remediation issues on your behalf.
 
 <img src="img/img.png" alt="Agent workflow overview">
 
@@ -19,23 +19,24 @@ An autonomous BeeAI agent built on the [BeeAI Framework](https://github.com/i-am
   - LLM provider credentials (tested with `openai/gpt-4.1-mini` via Agent Stack Platform).
 
 ## Install Dependencies
+Clone and enter the project
 ```bash
-# Clone and enter the project
 git clone https://github.com/sandijean90/VulnerabilityAgent.git
 cd VulnerabilityAgent
-code .
+```
 
-# Create the environment and install dependencies (uv preferred)
+Create the environment and install dependencies (uv preferred)
+```bash
 uv sync
 ```
 
 ## Required Secrets
-All secrets can be provided through the BeeAI UI when prompted, or stored in a local `.env` file for development. Never commit real credentials.
+All secrets can be provided through the Agent Stack UI when prompted.
 
 - **GitHub Personal Access Token (`GITHUB_PAT`)**
   - Go to [https://github.com/settings/tokens](https://github.com/settings/tokens).
   - Create a classic token with the `repo` scope (minimum: `repo:status`, `public_repo`, and `repo_deployment` if you expect to work with private repositories).
-  - Copy the token for later; GitHub only shows it once.
+  - Save the token for later; GitHub only shows it once.
 
 - **OSS Index Credentials (`OSS_INDEX_API`, `OSS_INDEX_EMAIL`)**
   - Register or sign in at [https://ossindex.sonatype.org](https://ossindex.sonatype.org).
@@ -43,40 +44,39 @@ All secrets can be provided through the BeeAI UI when prompted, or stored in a l
   - Use your account email for `OSS_INDEX_EMAIL` and the generated token for `OSS_INDEX_API`.
 
 - **LLM Provider (OpenAI recommended)**
-  - In the BeeAI UI, set your preferred provider and supply the API key.
-  - If running locally, you can export `OPENAI_API_KEY` (or the equivalent for your provider) before starting the agent.
+  - Follow the instructions below to set your preferred provider and supply the API key.
 
-For local testing outside BeeAI, create a `.env` file with the variables above and load it before running `main.py` (for example, `export $(cat .env | xargs)` in shells that support it).
 
 ## Running the Agent (main entry point only)
 
-Follow the AgentStack installation guide before starting any services: [AgentStack Quickstart](https://agentstack.beeai.dev/introduction/quickstart).
+1. Install the AgentStack platform per the quickstart instructions:
+   [AgentStack Quickstart](https://agentstack.beeai.dev/introduction/quickstart)
 
-1. Install the AgentStack platform per the quickstart instructions
-
-2. Start the AgentStack platform with observability (optional but recommended):
+3. Start the Agent Stack platform with observability (optional but recommended):
    ```bash
    agentstack platform start --set phoenix.enabled=true
    ```
-2. Complete the AgentStack model setup:
+2. Complete the Agent Stack model setup:
    ```bash
    agentstack model setup
    ```
-3. After model setup completes, launch the AgentStack UI:
+3. After model setup completes, launch the Agent Stack UI:
    ```bash
    agentstack ui
    ```
 4. Run the agent service from this repository (this is the only executable entry point you need):
    ```bash
-   uv run python -m src.agents.main
+   uv run src/agents/main.py
    ```
-5. In the AgentStack UI, select the **Dependency Defender** agent. Submit the form with:
+5. In the Agent Stack UI, select the **Dependency Defender** agent. Submit the form with:
    - `Repo URL` - the public GitHub repository you want to scan.
    - `Github Issue Style` - choose `concise` or `detailed` to control the generated issue format.
    - Model (recommended/default gpt-4.1-mini)
    - Accept the terms checkbox.
 
-The agent orchestrates all tool calls, streams progress through BeeAI trajectories, and posts a final summary with citation metadata.
+The agent orchestrates all tool calls, streams progress through trajectories, and posts a final summary with citation metadata.
+
+!! NOTE: The Agent will write github issues on your behalf! If you do not want this, don't run the agent!
 
 ### Sample Repositories for Testing
 - [KenOcheltree/bad-repo](https://github.com/KenOcheltree/bad-repo) - contains vulnerable dependencies to exercise issue creation.
