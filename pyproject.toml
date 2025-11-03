@@ -13,3 +13,19 @@ dependencies = [
     "beeai-framework>=0.1.59",
     "openinference-instrumentation-beeai>=0.1.13",
 ]
+
+[tool.ruff]
+line-length = 120
+target-version = "py311"
+
+[project.scripts]
+server = "agents.main:run"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[dependency-groups]
+dev = [
+    "watchfiles>=1.1.0",
+]
