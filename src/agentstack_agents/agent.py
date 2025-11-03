@@ -144,8 +144,7 @@ async def Dependency_Vulnerability_Agent(
     llm: Annotated[
         LLMServiceExtensionServer, 
         LLMServiceExtensionSpec.single_demand(
-            suggested=("rits:openai/gpt-oss-120b",
-                       "openai/gpt-4.1-mini")
+            suggested=("openai/gpt-4.1-mini",)
         )
     ],
     secrets: Annotated[
@@ -461,12 +460,6 @@ async def Dependency_Vulnerability_Agent(
     )
 
     # Start analysis
-    yield trajectory.trajectory_metadata(
-        title="Starting Analysis",
-        content=f"Beginning vulnerability scan for repository: {repo}"
-    )
-
-# Start analysis
     yield trajectory.trajectory_metadata(
         title="Starting Analysis",
         content=f"Beginning vulnerability scan for repository: {repo}"
