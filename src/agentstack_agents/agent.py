@@ -49,7 +49,7 @@ server = Server()
 memories = {}
 
 
-
+#HELPER FUNCTIONS
 def get_memory(context: RunContext) -> UnconstrainedMemory:
     """Get or create session memory"""
     context_id = getattr(context, "context_id", getattr(context, "session_id", "default"))
@@ -65,13 +65,98 @@ def to_framework_message(message: Message):
         return UserMessage(message_text)
     else:
         raise ValueError(f"Invalid message role: {message.role}")
-    
+
+CITATION_PATTERN = re.compile(r"\[([^\]]+)\]\(([^)]+)\)")
+
+
+def strip_markdown_links(text: str) -> str:
+    """Remove markdown links while keeping their visible text"""
+    return CITATION_PATTERN.sub(r"\1", text)
+
+
+def sanitize_stream_delta(delta: str, state: dict) -> str:
+    """Incrementally strip markdown links for streaming output"""
+    output: list[str] = []
+    i = 0
+    while i < len(delta):
+        ch = delta[i]
+        mode = state.get("mode", "normal")
+
+        if mode == "normal":
+            if ch == "[":
+                state["mode"] = "link_text"
+                state["buffer"] = ["["]
+                state["link_text_chars"] = []
+            else:
+                output.append(ch)
+
+        elif mode == "link_text":
+            buffer = state.setdefault("buffer", [])
+            buffer.append(ch)
+            if ch == "]":
+                state["mode"] = "link_wait_url"
+            else:
+                state.setdefault("link_text_chars", []).append(ch)
+
+        elif mode == "link_wait_url":
+            if ch == "(":
+                buffer = state.setdefault("buffer", [])
+                buffer.append(ch)
+                state["mode"] = "link_url"
+                state["url_depth"] = 1
+                link_text = "".join(state.get("link_text_chars", []))
+                if link_text:
+                    output.append(link_text)
+                state["link_text_chars"] = []
+            else:
+                buffer = state.get("buffer", [])
+                if buffer:
+                    output.append("".join(buffer))
+                state["mode"] = "normal"
+                state["buffer"] = []
+                state["link_text_chars"] = []
+                continue  # reprocess current character
+
+        elif mode == "link_url":
+            buffer = state.setdefault("buffer", [])
+            buffer.append(ch)
+            if ch == "(":
+                state["url_depth"] = state.get("url_depth", 1) + 1
+            elif ch == ")":
+                depth = state.get("url_depth", 1) - 1
+                state["url_depth"] = depth
+                if depth <= 0:
+                    state["mode"] = "normal"
+                    state["buffer"] = []
+                    state["url_depth"] = 0
+
+        i += 1
+
+    return "".join(output)
+
+
+def finalize_sanitizer_state(state: dict) -> str:
+    """Flush any buffered text when the stream ends"""
+    mode = state.get("mode", "normal")
+    buffer = state.get("buffer")
+    if mode in {"link_text", "link_wait_url"} and buffer:
+        # Not a valid markdown link, emit the buffered text as-is
+        flushed = "".join(buffer)
+    else:
+        flushed = ""
+
+    state["mode"] = "normal"
+    state["buffer"] = []
+    state["link_text_chars"] = []
+    state["url_depth"] = 0
+    return flushed
+
+
 def extract_citations(text: str, vulnerability_results=None) -> tuple[list[dict], str]:
     """Extract citations and clean text - returns citations in the correct format"""
     citations, offset = [], 0
-    pattern = r"\[([^\]]+)\]\(([^)]+)\)"
     
-    for match in re.finditer(pattern, text):
+    for match in CITATION_PATTERN.finditer(text):
         content, url = match.groups()
         start = match.start() - offset
 
@@ -84,9 +169,10 @@ def extract_citations(text: str, vulnerability_results=None) -> tuple[list[dict]
         })
         offset += len(match.group(0)) - len(content)
 
-    return citations, re.sub(pattern, r"\1", text)
+    return citations, strip_markdown_links(text)
 
-
+#AGENT THAT IS A SERVER ON THE AGENTSACK PLATFORM
+#Includes form details, A2A agent card details, handles secrets + trajectory + outut, agent logic + tools with requirements + memory, and more!
 @server.agent(
     name="Dependency Defender",
     default_input_modes=["text", "text/plain", "application/pdf", "text/csv", "application/json"],
@@ -468,6 +554,12 @@ async def Dependency_Vulnerability_Agent(
 
     try:
         response_text = ""
+        stream_state = {
+            "mode": "normal",
+            "buffer": [],
+            "link_text_chars": [],
+            "url_depth": 0,
+        }
         
         # Define the handler function to capture response text
         def handle_final_answer_stream(data: RequirementAgentFinalAnswerEvent, meta: EventMeta) -> None:
@@ -484,7 +576,9 @@ async def Dependency_Vulnerability_Agent(
             # Stream the deltas to user in real-time
             if meta.name == "final_answer":
                 if isinstance(event, RequirementAgentFinalAnswerEvent) and event.delta:
-                    yield event.delta
+                    cleaned_delta = sanitize_stream_delta(event.delta, stream_state)
+                    if cleaned_delta:
+                        yield cleaned_delta
                     continue
             
             # Check if a tool just finished
@@ -528,6 +622,10 @@ async def Dependency_Vulnerability_Agent(
         
         # Process citations
         citations, clean_text = extract_citations(response_text)
+
+        remaining_output = finalize_sanitizer_state(stream_state)
+        if remaining_output:
+            yield remaining_output
         
         if citations:
             yield trajectory.trajectory_metadata(
@@ -555,96 +653,6 @@ async def Dependency_Vulnerability_Agent(
 
 
         
-   
-
-
-# #THIS IS NOT YIELDING A FINAL ANSWER BUT IS WORKING OTHERWISE (YIELDING R$EAL TIME TOOL CALLS WITH TRAJECTORY)
-#     try:
-#         response_text = ""
-        
-#         # Define the handler function to capture response text
-#         def handle_final_answer_stream(data: RequirementAgentFinalAnswerEvent, meta: EventMeta) -> None:
-#             nonlocal response_text
-#             if data.delta:
-#                 response_text += data.delta
-        
-#         # Stream events with the handler registered
-#         async for event, meta in agent.run(
-#             user_message,
-#             execution=AgentExecutionConfig(max_iterations=20, max_retries_per_step=2, total_max_retries=5)
-#         ).on("final_answer", handle_final_answer_stream):  # <-- IMPORTANT: Register the handler
-            
-#             # Stream the deltas to user in real-time
-#             if meta.name == "final_answer":
-#                 if isinstance(event, RequirementAgentFinalAnswerEvent) and event.delta:
-#                     yield event.delta
-#                     continue
-            
-#             # Check if a tool just finished
-#             if meta.name == "success" and event.state.steps:
-#                 step = event.state.steps[-1]
-#                 if not step.tool:
-#                     continue
-                
-#                 tool_name = step.tool.name
-                
-#                 # Skip final_answer tool
-#                 if tool_name == "final_answer":
-#                     continue
-                
-#                 # Show trajectory for all other tools
-#                 if tool_name == "think":
-#                     thoughts = step.input.get("thoughts", "Planning...")
-#                     yield trajectory.trajectory_metadata(
-#                         title="Thinking",
-#                         content=thoughts[:200]
-#                     )
-                
-#                 elif tool_name == "GitHubUvLockReaderURLMinimal":
-#                     yield trajectory.trajectory_metadata(
-#                         title="Scanning Dependencies",
-#                         content=f"Reading uv.lock files from {repo}"
-#                     )
-                
-#                 elif "OSSIndex" in tool_name or "oss" in tool_name.lower():
-#                     yield trajectory.trajectory_metadata(
-#                         title="Vulnerability Check",
-#                         content="Querying Sonatype OSS Index for known CVEs"
-#                     )
-                
-#                 elif tool_name == "issue_write":
-#                     issue_title = step.input.get("title", "Vulnerability issue")
-#                     yield trajectory.trajectory_metadata(
-#                         title="GitHub Issue Created",
-#                         content=f"Issue: {issue_title}"
-#                     )
-        
-#         # Process citations
-#         citations, clean_text = extract_citations(response_text)
-        
-#         if citations:
-#             yield trajectory.trajectory_metadata(
-#                 title="Citations Found",
-#                 content=f"Extracted {len(citations)} citation(s)"
-#             )
-#             yield citation.citation_metadata(citations=citations)
-        
-#         yield trajectory.trajectory_metadata(
-#             title="Analysis Complete",
-#             content="Vulnerability scan finished"
-#         )
-        
-#         # Store the message (DON'T yield Message at end - content was already streamed)
-#         response_message = AgentMessage(text=clean_text)
-#         await context.store(response_message)
-
-#     except Exception as e:
-#         yield trajectory.trajectory_metadata(
-#             title="Analysis Error",
-#             content=f"Error: {e}"
-#         )
-#         yield f"Error during analysis: {e}"
-#         return
 
 
 def run():
