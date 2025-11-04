@@ -144,8 +144,7 @@ async def Dependency_Vulnerability_Agent(
     llm: Annotated[
         LLMServiceExtensionServer, 
         LLMServiceExtensionSpec.single_demand(
-            suggested=("rits:openai/gpt-oss-120b",
-                       "openai/gpt-4.1-mini")
+            suggested=("openai/gpt-4.1-mini",)
         )
     ],
     secrets: Annotated[
@@ -377,7 +376,8 @@ async def Dependency_Vulnerability_Agent(
         raise RuntimeError(f"Failed to configure the agent: {e}") from e
 
 
-    dependency_tool = GitHubUvLockReaderURLMinimal()
+    #dependency_tool = GitHubUvLockReaderURLMinimal()
+    dependency_tool = GitHubUvLockReaderURLMinimal(github_pat_key=github_pat_key)
     oss_index_tool = OSSIndexFromContextTool(api_key=oss_api_key, email=oss_email_key)
 
 

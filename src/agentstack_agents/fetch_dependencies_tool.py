@@ -106,7 +106,20 @@ class GitHubUvLockReaderURLMinimal(Tool[UvLockReaderInput, ToolRunOptions, Minim
     )
     input_schema = UvLockReaderInput
 
-    def __init__(self, options: dict[str, Any] | None = None) -> None:
+    def __init__(
+            self,
+        github_pat_key: Optional[str] = None,
+        options: dict[str, Any] | None = None
+        ) -> None:
+        """
+        Initialize the tool.
+        
+        Args:
+            github_pat_key: Github PAT Key
+            options: Additional tool options
+        """
+        self.github_pat_key = github_pat_key
+           
         super().__init__(options)
 
     def _create_emitter(self) -> Emitter:
@@ -278,7 +291,12 @@ class GitHubUvLockReaderURLMinimal(Tool[UvLockReaderInput, ToolRunOptions, Minim
         context: RunContext
     ) -> MinimalOutput:
         owner, repo, ref = self._parse_repo_url(input.repo_url)
-        headers = {"Accept": "application/vnd.github+json"}
+        token = self.github_pat_key
+        # print("github PAT: ", token)
+        #headers = {"Accept": "application/vnd.github+json"}
+        headers = {
+            "Authorization": f"Bearer {token}"
+        }
 
         async with httpx.AsyncClient(timeout=30) as client:
             # 1) Recursive tree fetch (fast path)
