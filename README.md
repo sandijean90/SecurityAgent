@@ -1,6 +1,6 @@
 # VulnerabilityAgent 🛡️
 
-An autonomous agent built on the [BeeAI Framework](https://github.com/i-am-bee/beeai-framework) and [AgentStack](https://github.com/i-am-bee/agentstack) that scans a GitHub repository's Python dependencies for known vulnerabilities and files remediation issues on your behalf.
+An autonomous agent built on the [BeeAI Framework](https://github.com/i-am-bee/beeai-framework) and [AgentStack](https://github.com/i-am-bee/agentstack) that scans a GitHub repository's Python dependencies for known vulnerabilities, writes remediation issues, and posts them on your behalf in the github repo.
 
 <img src="img/img.png" alt="Agent workflow overview">
 
@@ -16,7 +16,7 @@ An autonomous agent built on the [BeeAI Framework](https://github.com/i-am-bee/b
 - Access to the following external services:
   - GitHub account that can create Personal Access Tokens.
   - Sonatype OSS Index account (free).
-  - LLM provider credentials (tested with `openai/gpt-4.1-mini` via Agent Stack Platform).
+  - LLM provider credentials (tested with `openai/gpt-4.1-mini` via Agent Stack Platform. other models may have variable performance).
 
 ## Required Secrets
 All secrets can be provided through the Agent Stack UI when prompted.
@@ -33,11 +33,12 @@ All secrets can be provided through the Agent Stack UI when prompted.
   - Use your account email for `OSS_INDEX_EMAIL` and the generated token for `OSS_INDEX_API`.
 
 - **OpenAI Key (to configure on Agent Stack Platform)**
-  - Follow the instructions below to set your preferred provider and supply the API key.
+  -Create your OpenAI API key at [https://platform.openai.com/api-keys](https://platform.openai.com/api-keys). 
+  - Follow the instructions below to set your preferred provider and supply the API key to the Agent Stack platform.This is the only key that is set at the platform level, rather than agent level.
 
 
 ## Running the Agent
-!! NOTE: The Agent will write github issues on your behalf! If you do not want this, don't run the agent!
+!! NOTE: The Agent will write github issues on your behalf using your gitub user! If you do not want this, don't run the agent!
 
 ### Platform-Managed Agent
 
@@ -59,12 +60,12 @@ All secrets can be provided through the Agent Stack UI when prompted.
 
 6. Select the docker image option and paste in:
    ```bash
-   ghcr.io/sandijean90/vulnerabilityagent/my-agent:0.0.3
+   ghcr.io/sandijean90/vulnerabilityagent/my-agent:0.0.4
    ```
 7. Press continue and your agent should build in the platform! Refresh your home page to see the **Dependency Defender**!
 
 8. In the Agent Stack UI, select the **Dependency Defender** agent and submit the form with:
-   - `Repo URL` — the public GitHub repository you want to scan.
+   - `Repo URL` — the public GitHub repository you want to scan - check out the test repos in the "Sample Repositories for Testing" section
    - `Github Issue Style` — choose `concise` or `detailed` to control the generated issue format.
    - Model (recommended/default gpt-4.1-mini).
    - Accept the terms checkbox.
@@ -87,6 +88,7 @@ uv sync
 ```
 
 3. Install the AgentStack platform per the quickstart instructions: [AgentStack Quickstart](https://agentstack.beeai.dev/introduction/quickstart).
+
 4. Start the Agent Stack platform with observability (optional but recommended):
    ```bash
    agentstack platform start --set phoenix.enabled=true
@@ -104,10 +106,12 @@ uv sync
    uv run -m agentstack_agents.agent
    ```
 8. In the Agent Stack UI, select the **Dependency Defender** agent and submit the form with:
-   - `Repo URL` — the public GitHub repository you want to scan.
+   - `Repo URL` — the public GitHub repository you want to scan - check out the test repos in the "Sample Repositories for Testing" section
    - `Github Issue Style` — choose `concise` or `detailed` to control the generated issue format.
    - Model (recommended/default gpt-4.1-mini).
    - Accept the terms checkbox.
+
+9. Rememebr to kill your agent server when finished by running control+c in the active terminal.
 
 The agent orchestrates all tool calls, streams progress through trajectories, and posts a final summary with citation metadata.
 
@@ -117,7 +121,7 @@ The agent orchestrates all tool calls, streams progress through trajectories, an
 - [https://github.com/OurRepos/good-repo](https://github.com/OurRepos/good-repo) - clean baseline to validate the "no vulnerabilities found" path.
 
 ## Next Steps
-- Review the BeeAI traces at [http://localhost:6006](http://localhost:6006) (Phoenix) to audit each tool call.
+- Review the Agent traces at [http://localhost:6006](http://localhost:6006) (Phoenix) to audit each tool call.
 - Check the analyzed repo for new issues created by the Vulnerability Agent.
 
 ## How the System Works
@@ -131,4 +135,5 @@ The agent orchestrates all tool calls, streams progress through trajectories, an
 
 ## Known Limiatations
 - Currently the system is single turn and breaks if the user tries to engage with the agent after the initial form request.
+- Phoneix observability integration not displaying agent traces properly
   
