@@ -128,3 +128,7 @@ The agent orchestrates all tool calls, streams progress through trajectories, an
 5. **Vulnerability Scan** - `OSSIndexFromContextTool` batches the package list into Sonatype OSS Index queries and captures CVE data.
 6. **Issue Creation** - When vulnerabilities exist, the agent drafts GitHub issues (concise or detailed) and files them via the MCP GitHub issue tool.
 7. **Final Report** - The agent streams its reasoning, emits citation metadata for every link, and stores a final message summarizing the findings.
+
+## Known Limiatations
+- Currently the system is single turn and breaks if the user tries to engage with the agent after the initial form request.
+  
