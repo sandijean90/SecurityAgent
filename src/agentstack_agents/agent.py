@@ -444,25 +444,15 @@ async def Dependency_Vulnerability_Agent(
         
     #Setting up the GitHub writer tool and MCP server
     tools = await session_manager.get_tools(github_pat_key)
-    try:
-        
+    try:       
         issue_write = None
-        list_issue_types = None
-        list_label = None
-
         for tool in tools:
             if tool.name == "issue_write":
                 issue_write = await create_repo_scoped_tool(tool, repo)
-            elif tool.name == "list_issue_types":
-                list_issue_types = await create_repo_scoped_tool(tool, repo)
-            elif tool.name == "list_label":
-                list_label = await create_repo_scoped_tool(tool, repo)
 
     except ToolNotFoundError as e:
         raise RuntimeError(f"Failed to configure the agent: {e}") from e
 
-
-    #dependency_tool = GitHubUvLockReaderURLMinimal()
     dependency_tool = GitHubUvLockReaderURLMinimal(github_pat_key=github_pat_key)
     oss_index_tool = OSSIndexFromContextTool(api_key=oss_api_key, email=oss_email_key)
 
@@ -541,8 +531,8 @@ async def Dependency_Vulnerability_Agent(
         instructions=instructions,
         requirements=[ 
             ConditionalRequirement(ThinkTool, force_at_step=1),
-            ConditionalRequirement(GitHubUvLockReaderURLMinimal, force_at_step=2),
-            ConditionalRequirement(issue_write, only_after=[GitHubUvLockReaderURLMinimal,oss_index_tool]),
+            ConditionalRequirement(dependency_tool, force_at_step=2),
+            ConditionalRequirement(issue_write, only_after=[dependency_tool, oss_index_tool]),
         ],
     )
 
@@ -650,9 +640,6 @@ async def Dependency_Vulnerability_Agent(
         )
         yield f"Error during analysis: {e}"
         return
-
-
-        
 
 
 def run():
